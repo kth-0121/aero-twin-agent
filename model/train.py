@@ -47,6 +47,17 @@ def train(model, forward_fn, x, y, epochs=1500, lr=3e-3):
     return loss.item()
 
 
+def fit_core(temp_c_range=(140, 190), n=2000, dt=2.0, seed=1, epochs=1500, lr=3e-3, **core_kwargs):
+    """Train a LoopedPhysicsCore on the cure task and return it in eval mode.
+    Reused by app.py so the dashboard doesn't duplicate the training setup."""
+    x_train, y_train = sample_dataset(n, temp_c_range=temp_c_range, dt=dt, seed=seed)
+    core = LoopedPhysicsCore(input_dim=3, state_dim=1, **core_kwargs)
+    core_forward = lambda x: core(x.unsqueeze(1), physics_fn)[0].squeeze(1)
+    train(core, core_forward, x_train, y_train, epochs=epochs, lr=lr)
+    core.eval()
+    return core
+
+
 def main():
     torch.manual_seed(0)
     dt = 2.0
@@ -57,9 +68,8 @@ def main():
     baseline = BaselineMLP(input_dim=3, output_dim=1)
     train(baseline, baseline, x_train, y_train)
 
-    core = LoopedPhysicsCore(input_dim=3, state_dim=1, hidden_dim=32, n_loops=3)
+    core = fit_core(hidden_dim=32, n_loops=3)
     core_forward = lambda x: core(x.unsqueeze(1), physics_fn)[0].squeeze(1)
-    train(core, core_forward, x_train, y_train)
 
     with torch.no_grad():
         mse = nn.functional.mse_loss
