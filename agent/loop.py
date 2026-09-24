@@ -13,6 +13,10 @@ from agent.tools import TOOLS
 OLLAMA_URL = "http://localhost:11434/api/chat"
 MODEL = "qwen2.5:7b"
 
+# ponytail: qwen models sometimes drift into Chinese mid-answer; a blunt
+# system prompt is the cheap fix -- swap models if this stops being enough
+SYSTEM_PROMPT = "당신은 우주항공 제조 공정 Digital Twin 에이전트입니다. 반드시 한국어로만 답변하세요. 중국어나 다른 언어를 절대 섞지 마세요."
+
 TOOL_SPECS = [
     {
         "type": "function",
@@ -34,7 +38,8 @@ TOOL_SPECS = [
 
 
 def ask_agent(user_message, history=None):
-    messages = (history or []) + [{"role": "user", "content": user_message}]
+    messages = list(history) if history else [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages.append({"role": "user", "content": user_message})
     resp = requests.post(OLLAMA_URL, json={
         "model": MODEL, "messages": messages, "tools": TOOL_SPECS, "stream": False,
     })
