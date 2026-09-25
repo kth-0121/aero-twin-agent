@@ -1,42 +1,60 @@
-"""Train baseline vs physics-aware looped core on one-step cure prediction,
-then compare them on an out-of-distribution temperature regime -- this is the
-concrete test of the "제한된 데이터/미지 환경에서도 물리적 일관성 유지" claim.
+"""Train baseline vs physics-aware looped core on real 316L LPBF melt pool
+data (data/316L_meltpool.csv), then compare them on an unseen high-power
+regime -- the concrete test of "제한된 데이터/미지 환경에서도 물리적 일관성
+유지". Unlike the earlier cure experiment, the training LABELS here are real
+measured depth/width, not equation-generated -- physics_fn (the Rosenthal ROM)
+is only an approximate guide, exactly as the team's scenario doc expects.
 
-Task: (surface_temp_K, current_alpha, dt) -> next_alpha.
-physics_fn is the exact Arrhenius cure-rate equation (sim.cure.cure_rate),
-so the physics-aware core gets told precisely how wrong each guess is at
-every loop step, even outside the training distribution -- the baseline has
-no such signal and can only interpolate what it saw during training.
+Task: (laser_power_W, scan_speed_mm_s, layer_thickness_um) -> (depth_um, width_um).
 """
+import csv
+
 import numpy as np
 import torch
 import torch.nn as nn
 
-from sim.cure import cure_rate
+from sim.lpbf import melt_pool_width, melt_pool_depth
 from model.physics_core import LoopedPhysicsCore
 from model.baseline import BaselineMLP
 
-
-def sample_dataset(n, temp_c_range, alpha_range=(0.0, 0.9), dt=2.0, seed=0):
-    rng = np.random.default_rng(seed)
-    temp_k = rng.uniform(*temp_c_range, size=n) + 273.15
-    alpha = rng.uniform(*alpha_range, size=n)
-    alpha_next = np.clip(alpha + cure_rate(alpha, temp_k) * dt, 0.0, 1.0)
-
-    x = np.stack([temp_k, alpha, np.full(n, dt)], axis=-1).astype(np.float32)
-    y = alpha_next.reshape(-1, 1).astype(np.float32)
-    return torch.from_numpy(x), torch.from_numpy(y)
+DATA_PATH = "data/316L_meltpool.csv"
 
 
-def physics_fn(x, y_next_alpha):
-    temp_k, alpha, dt = x[..., 0:1], x[..., 1:2], x[..., 2:3]
-    expected = alpha + torch.as_tensor(
-        cure_rate(alpha.detach().numpy(), temp_k.detach().numpy()), dtype=x.dtype
-    ) * dt
-    return y_next_alpha - expected
+def load_dataset(power_range, path=DATA_PATH):
+    """Real 316L single-track rows within a laser-power window."""
+    xs, ys = [], []
+    with open(path) as f:
+        for row in csv.DictReader(f):
+            power = float(row["Laser Power"])
+            speed = float(row["Scan Speed"])
+            layer_t = float(row["Layer Thickness"])
+            depth = float(row["Depth"])
+            width = float(row["Width"])
+            if not (power_range[0] < power <= power_range[1]):
+                continue
+            if speed <= 0 or depth <= 0 or width <= 0:
+                continue  # no-melt / missing rows aren't useful regression targets
+            xs.append([power, speed, layer_t])
+            ys.append([depth, width])
+    x = torch.tensor(xs, dtype=torch.float32)
+    y = torch.tensor(ys, dtype=torch.float32)
+    return x, y
 
 
-def train(model, forward_fn, x, y, epochs=1500, lr=3e-3):
+def physics_fn(x, y_pred):
+    """ROM residual: predicted (depth,width) in um minus the Rosenthal-ROM
+    estimate in um. x = [power_W, speed_mm_s, layer_thickness_um]."""
+    power, speed_mm_s = x[..., 0:1], x[..., 1:2]
+    speed_m_s = (speed_mm_s / 1000.0).detach().numpy()
+    power_np = power.detach().numpy()
+
+    w_rom_um = melt_pool_width(power_np, speed_m_s) * 1e6
+    d_rom_um = melt_pool_depth(power_np, speed_m_s) * 1e6
+    rom = np.concatenate([d_rom_um, w_rom_um], axis=-1)
+    return y_pred - torch.as_tensor(rom, dtype=y_pred.dtype)
+
+
+def train(model, forward_fn, x, y, epochs=2000, lr=3e-3):
     opt = torch.optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.MSELoss()
     for _ in range(epochs):
@@ -47,11 +65,10 @@ def train(model, forward_fn, x, y, epochs=1500, lr=3e-3):
     return loss.item()
 
 
-def fit_core(temp_c_range=(140, 190), n=2000, dt=2.0, seed=1, epochs=1500, lr=3e-3, **core_kwargs):
-    """Train a LoopedPhysicsCore on the cure task and return it in eval mode.
+def fit_core(x_train, y_train, epochs=2000, lr=3e-3, **core_kwargs):
+    """Train a LoopedPhysicsCore on the LPBF task and return it in eval mode.
     Reused by app.py so the dashboard doesn't duplicate the training setup."""
-    x_train, y_train = sample_dataset(n, temp_c_range=temp_c_range, dt=dt, seed=seed)
-    core = LoopedPhysicsCore(input_dim=3, state_dim=1, **core_kwargs)
+    core = LoopedPhysicsCore(input_dim=3, state_dim=2, **core_kwargs)
     core_forward = lambda x: core(x.unsqueeze(1), physics_fn)[0].squeeze(1)
     train(core, core_forward, x_train, y_train, epochs=epochs, lr=lr)
     core.eval()
@@ -60,15 +77,15 @@ def fit_core(temp_c_range=(140, 190), n=2000, dt=2.0, seed=1, epochs=1500, lr=3e
 
 def main():
     torch.manual_seed(0)
-    dt = 2.0
 
-    x_train, y_train = sample_dataset(2000, temp_c_range=(140, 190), dt=dt, seed=1)
-    x_ood, y_ood = sample_dataset(500, temp_c_range=(200, 230), dt=dt, seed=2)  # unseen regime
+    x_train, y_train = load_dataset(power_range=(0, 400))
+    x_ood, y_ood = load_dataset(power_range=(600, 10_000))  # unseen high-power regime
+    print(f"train rows={len(x_train)}  ood rows={len(x_ood)}")
 
-    baseline = BaselineMLP(input_dim=3, output_dim=1)
+    baseline = BaselineMLP(input_dim=3, output_dim=2)
     train(baseline, baseline, x_train, y_train)
 
-    core = fit_core(hidden_dim=32, n_loops=3)
+    core = fit_core(x_train, y_train, hidden_dim=32, n_loops=3)
     core_forward = lambda x: core(x.unsqueeze(1), physics_fn)[0].squeeze(1)
 
     with torch.no_grad():
@@ -78,17 +95,16 @@ def main():
         ood_baseline = mse(baseline(x_ood), y_ood).item()
         ood_physics = mse(core_forward(x_ood), y_ood).item()
 
-    print(f"in-distribution  MSE  baseline={in_baseline:.5f}  physics-aware={in_physics:.5f}")
-    print(f"out-of-distrib.  MSE  baseline={ood_baseline:.5f}  physics-aware={ood_physics:.5f}")
+    print(f"in-distribution  MSE(um^2)  baseline={in_baseline:.1f}  physics-aware={in_physics:.1f}")
+    print(f"out-of-distrib.  MSE(um^2)  baseline={ood_baseline:.1f}  physics-aware={ood_physics:.1f}")
     print(f"OOD/in-dist error blowup  baseline={ood_baseline / in_baseline:.1f}x"
           f"  physics-aware={ood_physics / in_physics:.1f}x")
 
-    assert ood_physics < ood_baseline, (
-        "physics-aware core should generalize better than a physics-agnostic "
-        "baseline on the unseen temperature regime -- if this fails, the loop "
-        "isn't actually using the physics residual usefully"
-    )
-    print("check ok: physics-aware core generalizes better on unseen conditions")
+    if ood_physics < ood_baseline:
+        print("check ok: physics-aware core generalizes better on the unseen high-power regime")
+    else:
+        print("check FAILED: physics-aware core did not generalize better -- "
+              "ROM may be too inaccurate at this power range to help, investigate before pitching this result")
 
 
 if __name__ == "__main__":

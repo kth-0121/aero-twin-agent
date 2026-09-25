@@ -53,27 +53,31 @@ class LoopedPhysicsCore(nn.Module):
 
 
 def demo():
-    """Structural self-check: wires an untrained core to the real cure-kinetics
-    residual from sim.cure. Convergence itself only shows up after training --
-    this just proves the AI<->Physics loop is actually wired correctly."""
-    from sim.cure import cure_rate
+    """Structural self-check: wires an untrained core to the real LPBF
+    melt-pool ROM residual from sim.lpbf. Convergence itself only shows up
+    after training -- this just proves the AI<->Physics loop is wired right."""
+    import numpy as np
+    from sim.lpbf import melt_pool_width, melt_pool_depth
 
     torch.manual_seed(0)
-    # x = [current_temp_K, current_alpha, dt]; y = predicted next_alpha
-    core = LoopedPhysicsCore(input_dim=3, state_dim=1, hidden_dim=32, n_loops=3)
+    # x = [laser_power_W, scan_speed_mm_s, layer_thickness_um]; y = [depth_um, width_um]
+    core = LoopedPhysicsCore(input_dim=3, state_dim=2, hidden_dim=32, n_loops=3)
 
-    temp_k = torch.full((2, 5, 1), 453.15)   # 180C hold
-    alpha = torch.rand(2, 5, 1) * 0.3
-    dt = torch.full((2, 5, 1), 2.0)
-    x = torch.cat([temp_k, alpha, dt], dim=-1)
+    power = torch.full((2, 5, 1), 200.0)
+    speed = torch.full((2, 5, 1), 800.0)
+    layer_t = torch.full((2, 5, 1), 30.0)
+    x = torch.cat([power, speed, layer_t], dim=-1)
 
-    def physics_fn(x, y_next_alpha):
-        temp_k, alpha, dt = x[..., 0:1], x[..., 1:2], x[..., 2:3]
-        expected_next = alpha + cure_rate(alpha.numpy(), temp_k.numpy()) * dt.numpy()
-        return y_next_alpha - torch.as_tensor(expected_next, dtype=y_next_alpha.dtype)
+    def physics_fn(x, y_pred):
+        power, speed_mm_s = x[..., 0:1], x[..., 1:2]
+        speed_m_s = (speed_mm_s / 1000.0).numpy()
+        w_rom = melt_pool_width(power.numpy(), speed_m_s) * 1e6
+        d_rom = melt_pool_depth(power.numpy(), speed_m_s) * 1e6
+        rom = torch.as_tensor(np.concatenate([d_rom, w_rom], axis=-1), dtype=y_pred.dtype)
+        return y_pred - rom
 
     y_final, residual_norms = core(x, physics_fn)
-    assert y_final.shape == (2, 5, 1)
+    assert y_final.shape == (2, 5, 2)
     assert len(residual_norms) == 3
     print(f"demo ok: final pred shape={tuple(y_final.shape)}, residual per loop={residual_norms}")
 
