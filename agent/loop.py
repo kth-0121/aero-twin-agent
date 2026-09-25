@@ -36,6 +36,16 @@ def _looks_like_broken_tool_call(content):
     signal the sampled response is broken and worth retrying, not returning."""
     return bool(content) and "tool_call" in content.lower()
 
+
+_HAN_RE = re.compile(r"[一-鿿]")
+
+
+def _looks_non_korean(content, threshold=3):
+    """qwen2.5 occasionally drifts into Chinese despite the system prompt.
+    Hanja show up legitimately in Korean sometimes, so only flag it past a
+    small threshold of CJK Han characters rather than any single one."""
+    return len(_HAN_RE.findall(content or "")) > threshold
+
 OLLAMA_URL = "http://localhost:11434/api/chat"
 MODEL = "qwen2.5:7b"
 
@@ -44,6 +54,8 @@ MODEL = "qwen2.5:7b"
 SYSTEM_PROMPT = (
     "당신은 LPBF(금속 3D프린팅) 제조 공정 Digital Twin 에이전트입니다. "
     "LOF는 Lack of Fusion(미융착, 층/트랙이 제대로 붙지 않는 결함)의 약자입니다. "
+    "laser_power_w의 단위는 항상 W(와트)이고 mW(밀리와트)가 아닙니다. "
+    "scan_speed_mm_s의 단위는 항상 mm/s입니다. 단위를 절대 바꿔 말하지 마세요. "
     "반드시 한국어로만 답변하세요. 중국어나 다른 언어를 절대 섞지 마세요."
 )
 
@@ -52,7 +64,7 @@ TOOL_SPECS = [
         "type": "function",
         "function": {
             "name": "predict_melt_pool",
-            "description": "Predict LPBF melt pool depth/width for given laser power and scan speed, and check Lack-of-Fusion safety.",
+            "description": "Predict LPBF melt pool depth/width for given laser power and scan speed, and check Lack-of-Fusion safety and conduction/keyhole regime.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -64,7 +76,21 @@ TOOL_SPECS = [
                 "required": ["laser_power_w", "scan_speed_mm_s"],
             },
         },
-    }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "suggest_params_for_target_depth",
+            "description": "Given a target melt pool depth in micrometers, suggest a safe laser power and scan speed in the conduction regime.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "target_depth_um": {"type": "number"},
+                },
+                "required": ["target_depth_um"],
+            },
+        },
+    },
 ]
 
 
@@ -94,11 +120,17 @@ def ask_agent(user_message, history=None, max_attempts=3):
         messages.append({"role": "tool", "content": json.dumps(result)})
 
     if tool_calls:
-        final = requests.post(OLLAMA_URL, json={
-            "model": MODEL, "messages": messages, "stream": False,
-        })
-        final.raise_for_status()
-        return final.json()["message"]["content"]
+        content = None
+        for attempt in range(max_attempts):
+            final = requests.post(OLLAMA_URL, json={
+                "model": MODEL, "messages": messages, "stream": False,
+                "options": {"temperature": 0.3},
+            })
+            final.raise_for_status()
+            content = final.json()["message"]["content"]
+            if not _looks_non_korean(content):
+                break
+        return content
 
     return msg["content"]
 

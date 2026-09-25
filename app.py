@@ -12,6 +12,7 @@ import streamlit as st
 from agent.tools import predict_melt_pool
 from agent.loop import ask_agent
 from model.train import fit_core, load_dataset, physics_fn
+from sim.lpbf import classify_regime
 
 st.set_page_config(page_title="Aero Twin Agent", layout="wide")
 st.title("우주항공 제조 Digital Twin — LPBF Physics Reasoning Agent")
@@ -20,13 +21,13 @@ st.title("우주항공 제조 Digital Twin — LPBF Physics Reasoning Agent")
 @st.cache_resource
 def get_core():
     with st.spinner("Physics-aware 코어 학습 중 (최초 1회, 수십 초 소요)..."):
-        x_train, y_train = load_dataset(power_range=(0, 400))
+        x_train, y_train = load_dataset(regime="conduction")
         return fit_core(x_train, y_train, hidden_dim=32, n_loops=3)
 
 
 @st.cache_resource
 def get_replay_rows():
-    x, y = load_dataset(power_range=(0, 10_000))
+    x, y = load_dataset(regime="all")
     return x.tolist(), y.tolist()
 
 
@@ -65,6 +66,11 @@ if st.button("시뮬레이션 실행"):
     st.session_state.whatif_result = predict_melt_pool(power, speed)
 if "whatif_result" in st.session_state:
     st.json(st.session_state.whatif_result)
+    regime = classify_regime(power, speed / 1000.0, spot_diameter_m=100e-6)
+    if regime == "conduction":
+        st.success("Regime: conduction -- 물리 ROM 신뢰도 높음")
+    else:
+        st.warning("Regime: keyhole/transition -- 물리 ROM 정확도 하락 구간, 예측값 주의")
 
 st.header("3. Agent 권고")
 question = st.text_input(

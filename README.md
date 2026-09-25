@@ -3,10 +3,18 @@
 Physics Reasoning Agent를 활용한 우주항공 제조 Digital Twin 지능화 — 제4회 경남 AI·SW경진대회.
 
 **시나리오: LPBF(레이저 파우더베드퓨전) 용융풀 예측.** 레이저 파워·스캔속도를 입력하면
-용융풀 깊이/폭을 예측하고, LOF(미융착) 없이 안전한 공정 조건인지 판정한다. 실측 데이터
-(316L 스테인리스, 574개 조건)로 학습하되, Rosenthal 열전도 근사식을 물리 평가기(P)로 쓰는
-AI↔Physics 폐루프(Looped Transformer)로 제한된 데이터·미지 구간에서도 물리적으로 일관된
-예측을 유지한다. 그 위에서 로컬 sLLM 에이전트가 What-if 시뮬레이션과 의사결정을 지원한다.
+용융풀 깊이/폭을 예측하고, LOF(미융착) 없이 안전한 공정 조건인지, conduction/keyhole 중
+어느 영역인지 판정한다. 실측 데이터(316L 스테인리스, 623개 조건)로 학습하되, Rosenthal
+열전도 근사식을 물리 평가기(P)로 쓰는 AI↔Physics 폐루프(Looped Transformer)로 제한된
+데이터·미지 구간에서도 물리적으로 일관된 예측을 유지한다. 목표 깊이를 주면 안전한
+레이저 파워·스캔속도를 역으로 제안하는 목표제어(inverse design)도 지원한다. 그 위에서
+로컬 sLLM 에이전트가 What-if 시뮬레이션과 의사결정을 지원한다.
+
+**핵심 실험 결과** (`model/train.py`, 2개 실험):
+- conduction 영역 내부 일반화(공정한 비교): physics-aware가 baseline MLP 대비 MSE 약 43% 낮음
+- conduction→keyhole 영역 전환(팀이 예상한 위험 시나리오): 물리 ROM 자체의 정확도가 떨어지는
+  구간이라 physics-aware의 우위가 크게 줄어듦(약 4%) — ROM 신뢰도가 낮은 영역에서는 물리
+  잔차를 맹신하면 안 된다는 걸 실측으로 확인, regime gate(`classify_regime`) 설계의 근거가 됨
 
 ## 준비
 
@@ -52,4 +60,4 @@ app.py    Streamlit 데모 대시보드
 ```
 
 ## 데이터 출처
-- 316L 실측 데이터: [MAMCEMeltPool/316L-Melt-Pool-Morphology-Dataset](https://github.com/MAMCEMeltPool/316L-Melt-Pool-Morphology-Dataset) (574개 조건, CSV)
+- 316L 실측 melt pool 데이터: [Zenodo 16979848](https://zenodo.org/records/16979848) (Hofmann 2025, Aconity-Midi 장비, 677트랙/고유조건 623개, CC BY 4.0)
