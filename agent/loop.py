@@ -91,6 +91,21 @@ TOOL_SPECS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "recommend_process_action",
+            "description": "Assess whether the current laser power/scan speed is in a normal, LOF-risk, or keyhole-risk state, and if risky, recommend an adjustment verified against the physics ROM.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "laser_power_w": {"type": "number"},
+                    "scan_speed_mm_s": {"type": "number"},
+                },
+                "required": ["laser_power_w", "scan_speed_mm_s"],
+            },
+        },
+    },
 ]
 
 

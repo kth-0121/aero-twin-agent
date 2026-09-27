@@ -13,6 +13,7 @@ from agent.tools import predict_melt_pool
 from agent.loop import ask_agent
 from model.train import fit_core, load_dataset, physics_fn
 from sim.lpbf import classify_regime
+from sim.decision import recommend_action
 
 st.set_page_config(page_title="Aero Twin Agent", layout="wide")
 st.title("우주항공 제조 Digital Twin — LPBF Physics Reasoning Agent")
@@ -72,7 +73,20 @@ if "whatif_result" in st.session_state:
     else:
         st.warning("Regime: keyhole/transition -- 물리 ROM 정확도 하락 구간, 예측값 주의")
 
-st.header("3. Agent 권고")
+st.header("3. 행동 결정 (공정 상태 판단 + ROM 가상검증)")
+if st.button("현재 조건 상태 판단 및 행동 추천"):
+    st.session_state.action_result = recommend_action(power, speed)
+if "action_result" in st.session_state:
+    result = st.session_state.action_result
+    state = result["current_state"]
+    if state["status"] == "normal":
+        st.success(f"상태: 정상 (conduction, LOF 안전) → {result['recommended_action']}")
+    else:
+        st.warning(f"상태: {state['status']} → 추천 행동: {result['recommended_action']}")
+        st.caption(result["reason"])
+    st.json(result)
+
+st.header("4. Agent 권고")
 question = st.text_input(
     "질문", f"레이저 파워 {power}W, 스캔속도 {speed}mm/s로 찍으면 LOF 없이 안전하게 붙어?"
 )

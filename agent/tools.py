@@ -1,5 +1,6 @@
 """Tools the AI agent can call. Small enough that a dict dispatch beats a framework."""
 from sim.lpbf import melt_pool_width, melt_pool_depth, lof_risk, classify_regime, suggest_process_params
+from sim.decision import recommend_action
 
 
 def predict_melt_pool(laser_power_w, scan_speed_mm_s, spot_diameter_um=100.0,
@@ -27,9 +28,16 @@ def suggest_params_for_target_depth(target_depth_um):
     return suggest_process_params(target_depth_um)
 
 
+def recommend_process_action(laser_power_w, scan_speed_mm_s):
+    """현재 공정 조건의 상태(정상/LOF위험/Keyhole위험)를 판단하고, 위험하면
+    ROM으로 가상검증한 행동 후보 중 최선을 추천한다."""
+    return recommend_action(laser_power_w, scan_speed_mm_s)
+
+
 TOOLS = {
     "predict_melt_pool": predict_melt_pool,
     "suggest_params_for_target_depth": suggest_params_for_target_depth,
+    "recommend_process_action": recommend_process_action,
 }
 
 
@@ -42,6 +50,10 @@ def demo():
     suggestion = suggest_params_for_target_depth(target_depth_um=60.0)
     assert abs(suggestion["predicted_depth_um"] - 60.0) < 1.0
     print(f"demo ok: {suggestion}")
+
+    action = recommend_process_action(laser_power_w=80, scan_speed_mm_s=1500)
+    assert "recommended_action" in action
+    print(f"demo ok: {action}")
 
 
 if __name__ == "__main__":
