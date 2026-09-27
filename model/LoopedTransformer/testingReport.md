@@ -100,3 +100,17 @@ D ≈ W/2 라는 식을 쓰는데, Width 그러니까 열 전도에 대해서는
 
 ### Step 4 : 물리적 관계 정의 및 모델링 수정
 일단 Depth에 대해 열전도를 모델링하는 것을 제거.. 관계만 파악하도록 변경
+
+Linear Energy Density 추가
+   E_L = P_laser / v_scan [J/mm]
+   기존 P_laser, v_scan, d_laser, t_powder는 그대로 유지
+즉 입력이 4 → 5 features
+
+Rosenthal Physics Evaluator 수정
+   기존의 D = W/2 제거
+   Rosenthal은 W의 열적 스케일만 제약
+Depth는 완전히 데이터 기반으로 학습 (수식 모델링하기가 너무 어려워서 어쩔 수 없었음..ㅜ)
+
+Area는 $$ A \approx \frac{\pi}{4}WD $$ 의 기하학적 일관성만 검사
+
+따라서 현재 데이터의 넓은 D/W 분포를 억지로 제한하지 않음. (데이터 flow대로 학습)
