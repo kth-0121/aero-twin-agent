@@ -1,0 +1,57 @@
+361L 데이터 : L/T 모델 및 Baseline의 기본 데이터로 활용
+NIST AM bench : External validation
+
+데이터 처리 구조 Diagram:
+                    ┌─────────────────────┐
+                    │ Experimental Dataset│
+                    │      677 samples    │
+                    └──────────┬──────────┘
+                               │
+                 ┌─────────────┴─────────────┐
+                 │                           │
+                 ▼                           ▼
+          Process State              Observed State
+                 │                           │
+       P, v, spot, powder              width
+       thickness                       depth
+                                       area
+                                       balling
+                 │                           │
+                 └─────────────┬─────────────┘
+                               ▼
+                       Physical State
+                               │
+                  ┌────────────┴────────────┐
+                  ▼                         ▼
+             ML Predictor            Physics Evaluator
+                                            │
+                                ┌───────────┼───────────┐
+                                ▼           ▼           ▼
+                           Rosenthal    Eagar-Tsai   Enthalpy
+                                │           │           │
+                                └───────────┼───────────┘
+                                            ▼
+                                     Physics Residual
+                                            │
+                                            ▼
+                                     Looped Transformer
+
+데이터 I/O 구조:
+
+Input / Process State
+├── P_laser       [W]
+├── v_scan        [mm/s]
+├── d_laser       [mm]
+└── t_powder      [μm]
+
+        ↓
+
+Physical State
+├── w_melt        [μm]
+├── d_melt        [μm]
+└── A_melt        [μm²]
+
+        ↓
+
+Process State / Risk
+└── Balling       [0/1]
