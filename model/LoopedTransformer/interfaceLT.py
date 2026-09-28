@@ -51,7 +51,7 @@ class RUN(LoopedTransformer):
         scaler_y = checkpoint["y_scaler"]
 
         # 모델 초기화
-        model = modelLT.LoopedTransformer(n_features=len(FEATURES), loop_steps=1000)
+        model = modelLT.LoopedTransformer(n_features=len(FEATURES), feedback_dim=7, loop_steps=1000)
         model.load_state_dict(checkpoint["model"])
         model.eval()
 

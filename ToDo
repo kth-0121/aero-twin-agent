@@ -13,9 +13,8 @@ Part Baseline Model
 
 Part Looped Transformer
 ■ Interface 정의
-□ 
 Part Physics Evaluator
-
+■ 유체 모델 도입 고려
 Part Digital Twin
 
 Part Action Selector

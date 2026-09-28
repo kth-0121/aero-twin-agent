@@ -70,9 +70,9 @@ class LoopedTransformer(nn.Module): # L/T Main
 
     def __init__(
         self,
-        n_features: int = 5,
+        n_features: int = 7,
         state_dim: int = 3,
-        feedback_dim: int = 3,
+        feedback_dim: int = 7,
         d_model: int = 64,
         n_heads: int = 4,
         n_layers: int = 2,
@@ -145,7 +145,10 @@ class LoopedTransformer(nn.Module): # L/T Main
                 feedback = torch.zeros_like(prediction)
                 confidence = None
             else:
-                result = physics_evaluator.evaluate(x, prediction)
+                if hasattr(physics_evaluator, 'evaluate_loop_wise'):
+                    result = physics_evaluator.evaluate_loop_wise(x, prediction, loop_idx=_)
+                else:
+                    result = physics_evaluator.evaluate(x, prediction)
                 feedback = result.residual
                 confidence = result.confidence
 
