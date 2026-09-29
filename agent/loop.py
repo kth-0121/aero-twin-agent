@@ -70,6 +70,7 @@ TOOL_SPECS = [
                 "properties": {
                     "laser_power_w": {"type": "number"},
                     "scan_speed_mm_s": {"type": "number"},
+                    "spot_diameter_um": {"type": "number", "default": 100.0},
                     "hatch_um": {"type": "number"},
                     "layer_thickness_um": {"type": "number"},
                 },
@@ -101,6 +102,9 @@ TOOL_SPECS = [
                 "properties": {
                     "laser_power_w": {"type": "number"},
                     "scan_speed_mm_s": {"type": "number"},
+                    "spot_diameter_um": {"type": "number", "default": 100.0},
+                    "hatch_um": {"type": "number", "default": 100.0},
+                    "layer_thickness_um": {"type": "number", "default": 30.0},
                 },
                 "required": ["laser_power_w", "scan_speed_mm_s"],
             },

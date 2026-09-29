@@ -145,6 +145,31 @@ ProcessCondition
 
 각 구성 요소는 독립적으로 교체할 수 있도록 분리한다. 특히 모델 예측, 형상 변환, 안전 판정, 시뮬레이션 결과를 하나의 숫자나 단일 `safe` 플래그로 뭉치지 않는다.
 
+### 7.1 L/T와 Action/ROM 사이의 현재 계약
+
+두 모델의 결과는 같은 물리량을 추정하더라도 동일한 평가기로 간주하지 않는다. L/T Physics Evaluator는 반복 추론을 위한 형상 일관성 피드백과 유동 지표를 제공한다. `sim.lpbf`는 현재 LOF/regime 판정과 Action 후보의 가상 재평가를 담당한다. 두 evaluator의 상수와 깊이 추정식이 다르므로 결과를 덮어쓰거나 평균내지 않고, 각 결과에 출처를 보존한다.
+
+| 계약 항목 | 값/소유자 | 의미 |
+|---|---|---|
+| 입력 공정조건 | `P_laser[W]`, `v_scan[mm/s]`, `d_laser[mm]`, `t_powder[um]` | L/T가 요구하는 원시 입력. Action/ROM에는 `spot_diameter_um`, `hatch_um`, `layer_thickness_um`도 전달한다. `d_laser[mm]`는 spot diameter로 변환하며, `t_powder`와 layer thickness는 물리적 정의가 일치하는지 확인한 뒤 매핑한다. |
+| L/T Physical State | `melt_width[um]`, `aspect_ratio[-]`, `melt_area[um^2]`; `depth = width * aspect_ratio` | 데이터 기반 추정과 loop refinement 결과. 원본 예측값과 파생 깊이를 구분한다. |
+| L/T Physics Evidence | loop별 feedback residual 및 Ma/Re/We/Ca 지표, evaluator/checkpoint 식별자 | L/T 내부 refinement 근거. confidence는 보정된 불확실성이나 안전 확률이 아니다. |
+| ROM Risk/Regime | `sim.decision.assess_state()` 결과와 `sim.lpbf` 기준 | 현재 Action 정책에서 사용하는 LOF criterion 및 conduction/keyhole-or-transition 판정. 확률이 아닌 현재 ROM의 rule-based 결과다. |
+| Action 후보 검증 | `sim.decision.recommend_action()` | 후보 공정조건마다 ROM 상태를 다시 계산한다. 후보 평가가 L/T로 전환되기 전까지 ROM이 Action 선택의 기준이다. |
+
+Agent의 예측 및 Action 도구는 레이저 출력과 속도뿐 아니라 spot diameter, hatch spacing, layer thickness를 입력받는다. 생략 시 각각 100 um, 100 um, 30 um 기본값을 쓴다. 실제 L/T 결과와 비교하거나 후보를 평가할 때는 이 기본값에 의존하지 말고 해당 공정의 값을 명시적으로 전달한다.
+
+현재 L/T와 Action 경로는 아직 실행 시 연결되어 있지 않다. 통합 시에는 같은 `ProcessCondition`을 두 경로에 전달하고, 다음을 별도 필드로 기록한다.
+
+```text
+physical_state: L/T의 W, R, A 및 파생 D
+physics_evidence: L/T evaluator의 loop별 신호와 출처
+process_risk: sim ROM의 LOF/regime 결과와 evaluator 버전
+counterfactuals: 기존 Action 후보별 ROM 재평가 결과
+```
+
+L/T evidence는 Action Generator의 설명 근거로 전달할 수 있지만, 검증 전에는 ROM risk를 대체하거나 위험 확률로 해석하지 않는다. 두 경로의 판정이 다르면 불일치 자체를 남기고 검토 대상으로 표시한다. 물성 상수나 regime 기준을 통합하려면 데이터/체크포인트 기준으로 별도 교차 검증하고, L/T 물리 피드백 변경 시에는 재학습 및 checkpoint 버전 변경을 요구한다.
+
 ## 8. 현재 범위와 미지원 사항
 
 - 시간 이력, 센서 스트림, 이전 상태는 모델 입력에 포함되지 않는다. 각 호출은 현재 입력 행을 독립 추론한다.
