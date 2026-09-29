@@ -3,20 +3,18 @@
 """
 # 유의해야할 점: 기존 Transformer 모델과 달리 이 Proj의 Transformer의 sequence는 데이터의 시간축이 아니라 추론 iteration이다.
 
-"""
-Mathmatical Modeling
-x=[P,v,d,t]
-y=[W,D,A]
-
-x→fθ​(x)→y^​0​
-r0​=PhysicsEvaluator(x,y^​0​)
-
-h1​=Update(h0​,r0​)
-^y​1​=fθ​(x,h1​)
-
-r1​=PhysicsEvaluator(x,y^​1​)
-Loop...
-"""
+# Mathmatical Modeling
+# x=[P,v,d,t]
+# y=[W,D,A]
+#
+# x→fθ​(x)→y^​0​
+# r0​=PhysicsEvaluator(x,y^​0​)
+#
+# h1​=Update(h0​,r0​)
+# ^y​1​=fθ​(x,h1​)
+#
+# r1​=PhysicsEvaluator(x,y^​1​)
+# Loop...
 
 from __future__ import annotations
 
