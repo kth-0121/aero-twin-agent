@@ -77,16 +77,18 @@ def main():
     schemes = pd.DataFrame(rows, columns=["평가", "train", "평가 데이터", "확인하는 것"]).set_index("평가")
 
     # 종합표 1: 모델 × 평가 std_MSE
+    order = list(means["val"].index)   # 모델 순서: baseline → ROM → LT
     overall = pd.DataFrame({SCHEMES[s][0]: means[s]["std_MSE"].map("{:.3f}".format)
-                            + " ± " + stds[s]["std_MSE"].map("{:.3f}".format) for s in SCHEMES}).fillna("-")
+                            + " ± " + stds[s]["std_MSE"].map("{:.3f}".format) for s in SCHEMES}
+                           ).reindex(order).fillna("-")
 
     # 종합표 2: 평가별 LT 개선률 (가장 강한 baseline 대비)
     judge = {}
     for s in SCHEMES:
         m = means[s]["std_MSE"]
         best = m[BASELINES].idxmin()
-        judge[SCHEMES[s][0]] = {f"{lt} vs 최강 baseline({best})": round((m[best] - m[lt]) / m[best] * 100, 1)
-                                for lt in LT_EVAL}
+        judge[SCHEMES[s][0]] = {"최강 baseline": best,
+                                **{lt: round((m[best] - m[lt]) / m[best] * 100, 1) for lt in LT_EVAL}}
     judge = pd.DataFrame(judge).T
 
     parts = [HEADER, "\n## 평가 방식 4가지\n\n", to_md(schemes, "평가"),
@@ -99,7 +101,7 @@ def main():
         improve = pd.DataFrame({lt: {b: round((m.loc[b, "std_MSE"] - m.loc[lt, "std_MSE"])
                                               / m.loc[b, "std_MSE"] * 100, 1) for b in BASELINES}
                                 for lt in LT_EVAL})
-        parts += [f"\n---\n\n## {name}\n{purpose}\n\n### 주요 지표\n\n", to_md(table),
+        parts += [f"\n---\n\n## {name}\n{purpose}\n\n![{name}](figures/{s}.png)\n\n### 주요 지표\n\n", to_md(table),
                   "\n### baseline 별 LT 개선률 (%)\n\n", to_md(improve, "baseline")]
 
     (RES / "results.md").write_text("".join(parts), encoding="utf-8")
