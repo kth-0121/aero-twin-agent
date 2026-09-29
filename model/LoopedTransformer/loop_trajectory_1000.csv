@@ -1,14 +1,14 @@
-field,value
-P_laser_W,200
-v_scan_mm_s,900
-d_laser_mm,0.11
-t_powder_um,30
-source_row,data/316L_meltpool.csv idx=169
-actual_melt_width,167.96
-actual_melt_depth,30.289
-actual_aspect_ratio,0.1803
-actual_melt_area,5831.225
-
+field,value,,,,,
+P_laser_W,200,,,,,
+v_scan_mm_s,900,,,,,
+d_laser_mm,0.11,,,,,
+t_powder_um,30,,,,,
+source_row,data/316L_meltpool.csv idx=169,,,,,
+actual_melt_width,167.96,,,,,
+actual_melt_depth,30.289,,,,,
+actual_aspect_ratio,0.1803,,,,,
+actual_melt_area,5831.225,,,,,
+,,,,,,
 loop_idx,pred_melt_width,pred_aspect_ratio,pred_melt_area,width_error,ratio_error,area_error
 0,130.1098,0.2959,3817.5615,-37.8502,0.1156,-2013.6635
 1,149.9577,0.3152,6233.1807,-18.0023,0.1349,401.9557
