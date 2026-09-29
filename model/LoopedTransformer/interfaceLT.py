@@ -10,6 +10,7 @@ import numpy as np
 
 import dataLT
 import modelLT
+import physicsLT
 
 FEATURES = dataLT.FEATURES
 TARGETS = dataLT.TARGETS
@@ -51,9 +52,19 @@ class RUN(LoopedTransformer):
         scaler_y = checkpoint["y_scaler"]
 
         # 모델 초기화
-        model = modelLT.LoopedTransformer(n_features=len(FEATURES), feedback_dim=7, loop_steps=1000)
+        # loop_steps=12: 검증데이터로 3~1000 스캔한 결과 12 근처(8~15)가 최적,
+        # 학습값(3)보다도 나음. 1000은 학습때 안 본 구간이라 오차가 크게 나빠짐.
+        model = modelLT.LoopedTransformer(n_features=len(FEATURES), feedback_dim=7, loop_steps=12)
         model.load_state_dict(checkpoint["model"])
         model.eval()
+
+        # 학습 때 쓴 것과 같은 물리평가기 (FluidThermalPhysicsEvaluator)를
+        # 추론 시에도 생성해서 넘겨야 함 -- 없으면 feedback이 zeros(dim=3)로
+        # 대체되어 feedback_encoder(dim=7 기대)와 shape mismatch 발생함
+        physics_evaluator = physicsLT.FluidThermalPhysicsEvaluator(
+            x_mean=scaler_x.mean_, x_scale=scaler_x.scale_,
+            y_mean=scaler_y.mean_, y_scale=scaler_y.scale_,
+        )
 
         # 입력 텐서 변환
         x_scaled = scaler_x.transform(data[FEATURES]).astype(np.float32)
@@ -61,7 +72,7 @@ class RUN(LoopedTransformer):
 
         # 예측
         with torch.no_grad():
-            output = model(x_tensor)
+            output = model(x_tensor, physics_evaluator=physics_evaluator)
             final_predictions_scaled = output.predictions[-1].numpy()
 
         final_predictions = scaler_y.inverse_transform(final_predictions_scaled)
