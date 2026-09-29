@@ -1,6 +1,10 @@
 """
 601Solutions
 """
+# [dataLT.py] Looped Transformer 학습용 데이터 준비 모듈
+# - 316L melt pool CSV를 읽어 입력 x(공정조건 4 + 파생 feature 3 = 7개)와
+#   정답 y(W: 폭, R: 깊이/폭, A: 단면적)를 만든다.
+# - 사용 순서: load_316l_csv → make_iid_split → fit_scalers → MeltPoolDataset
 
 from __future__ import annotations
 
@@ -16,9 +20,11 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
 
+# 입력 x 컬럼: CSV 원본 공정조건 4개 + load_316l_csv에서 계산하는 파생 feature 3개
 BASE_FEATURES = ["P_laser", "v_scan", "d_laser", "t_powder"]
 DERIVED_FEATURES = ["linear_energy", "peclet_number", "normalized_enthalpy"]
 
+# 정답 y 컬럼 (balling은 Dataset에 담기지만 현재 loss에는 미사용)
 #   W = melt-pool width [um]
 #   R = D/W = melt-pool aspect ratio [-]
 #   A = melt-pool cross-sectional area [um^2]
@@ -26,6 +32,7 @@ TARGETS = ["melt_width", "aspect_ratio", "melt_area"]
 RISK = "balling"
 
 
+# 입력 feature 목록 반환. True면 파생 feature 3개가 모두 추가된다 (linear_energy만이 아님)
 def get_features(include_linear_energy: bool = True) -> list[str]:
     return BASE_FEATURES + (DERIVED_FEATURES if include_linear_energy else [])
 
@@ -33,6 +40,8 @@ def get_features(include_linear_energy: bool = True) -> list[str]:
 FEATURES = get_features(True)
 
 
+# CSV 로드 + 파생 feature(E_L, Pe, H*) 및 aspect_ratio 계산
+# CSV 헤더의 따옴표가 깨져 있어 헤더를 건너뛰고 컬럼명을 직접 붙인다
 def load_316l_csv(path: str | Path) -> pd.DataFrame:
     """Load the supplied 316L single-track CSV and derive v3 geometry state."""
     path = Path(path)
@@ -59,6 +68,7 @@ def load_316l_csv(path: str | Path) -> pd.DataFrame:
     # H* = eta*P / (h_s * sqrt(alpha*d^3*v))
     # where h_s = rho*cp*(Tm-T0) is the sensible enthalpy density needed
     # to heat the material from T0 to the melting temperature.
+    # 316L 물성 상수 (재료가 바뀌면 이 값들을 바꿔야 함)
     rho_316l = 7800.0              # kg/m^3
     cp_316l = 460.0                # J/(kg K)
     alpha_316l = 5.0e-6            # m^2/s, representative 316L value
@@ -89,6 +99,7 @@ def load_316l_csv(path: str | Path) -> pd.DataFrame:
     return df
 
 
+# x, y 표준화 기준(scaler)을 묶어 보관. 예측 시 같은 기준으로 변환·역변환하는 데 사용
 @dataclass
 class DataScalers:
     x: StandardScaler
@@ -98,6 +109,8 @@ class DataScalers:
 
 
 
+# 행 단위 무작위 분할: train 70% / val 15% / test 15%
+# 주의: 같은 공정조건의 반복 실험 쌍이 train과 test에 나뉠 수 있음
 def make_iid_split(
     df: pd.DataFrame,
     seed: int = 42,
@@ -112,6 +125,7 @@ def make_iid_split(
 
 
 
+# x, y를 평균 0 / 표준편차 1로 맞추는 scaler 생성. val/test 정보 유출을 막기 위해 train으로만 fit
 def fit_scalers(train_df: pd.DataFrame, include_linear_energy: bool = True) -> DataScalers:
     features = get_features(include_linear_energy)
     x = StandardScaler().fit(train_df[features])
@@ -119,6 +133,7 @@ def fit_scalers(train_df: pd.DataFrame, include_linear_energy: bool = True) -> D
     return DataScalers(x=x, y=y, features=features, targets=TARGETS.copy())
 
 
+# PyTorch Dataset. 샘플 하나를 {"x", "y", "balling", "id"} dict로 반환 (x, y는 표준화된 값)
 class MeltPoolDataset(Dataset):
     def __init__(self, df: pd.DataFrame, scalers: DataScalers):
         self.df = df.reset_index(drop=True)

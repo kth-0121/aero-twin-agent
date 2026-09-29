@@ -1,6 +1,11 @@
 """
 601Solutions
 """
+# [interfaceLT.py] 학습된 Looped Transformer를 다른 모듈에서 호출하기 위한 인터페이스
+# - setData(csv 경로)                 → 입력 DataFrame (원본 + 파생 feature)
+# - getPredict(체크포인트 .pt 경로, df) → 예측 DataFrame (melt_width, aspect_ratio, melt_area)
+# - 사용: lt = RUN(); df = lt.setData(csv); pred = lt.getPredict("looped_transformer_v1.pt", df)
+# - 주의: physics_evaluator 없이 예측하므로 추론 시 physics residual은 0 (loop_steps=1000)
 
 from abc import ABC, abstractmethod
 
