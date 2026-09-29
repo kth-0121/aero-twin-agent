@@ -13,6 +13,7 @@ Part Baseline Model
 
 Part Looped Transformer
 ■ Interface 정의
+□ reasoning 기능 개발; 현재 공정이 어느 방향으로 흘러가는지를 추론하기 위함
 Part Physics Evaluator
 ■ 유체 모델 도입 고려
 Part Digital Twin
