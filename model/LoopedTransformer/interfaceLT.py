@@ -52,7 +52,9 @@ class RUN(LoopedTransformer):
         scaler_y = checkpoint["y_scaler"]
 
         # 모델 초기화
-        model = modelLT.LoopedTransformer(n_features=len(FEATURES), feedback_dim=7, loop_steps=3)
+        # loop_steps=12: 검증데이터로 3~1000 스캔한 결과 12 근처(8~15)가 최적,
+        # 학습값(3)보다도 나음. 1000은 학습때 안 본 구간이라 오차가 크게 나빠짐.
+        model = modelLT.LoopedTransformer(n_features=len(FEATURES), feedback_dim=7, loop_steps=12)
         model.load_state_dict(checkpoint["model"])
         model.eval()
 
