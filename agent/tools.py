@@ -28,10 +28,17 @@ def suggest_params_for_target_depth(target_depth_um):
     return suggest_process_params(target_depth_um)
 
 
-def recommend_process_action(laser_power_w, scan_speed_mm_s):
+def recommend_process_action(laser_power_w, scan_speed_mm_s, spot_diameter_um=100.0,
+                             hatch_um=100.0, layer_thickness_um=30.0):
     """현재 공정 조건의 상태(정상/LOF위험/Keyhole위험)를 판단하고, 위험하면
-    ROM으로 가상검증한 행동 후보 중 최선을 추천한다."""
-    return recommend_action(laser_power_w, scan_speed_mm_s)
+    ROM으로 가상검증한 행동 후보 중 최선을 추천한다. 형상 입력의 단위는 um이다."""
+    return recommend_action(
+        laser_power_w,
+        scan_speed_mm_s,
+        spot_diameter_um=spot_diameter_um,
+        hatch_um=hatch_um,
+        layer_thickness_um=layer_thickness_um,
+    )
 
 
 TOOLS = {
@@ -53,6 +60,15 @@ def demo():
 
     action = recommend_process_action(laser_power_w=80, scan_speed_mm_s=1500)
     assert "recommended_action" in action
+    thicker_layer_action = recommend_process_action(
+        laser_power_w=80,
+        scan_speed_mm_s=1500,
+        layer_thickness_um=60.0,
+    )
+    assert (
+        thicker_layer_action["current_state"]["lof_criterion"]
+        != action["current_state"]["lof_criterion"]
+    )
     print(f"demo ok: {action}")
 
 
