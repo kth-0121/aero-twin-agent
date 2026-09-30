@@ -2,12 +2,11 @@
 
 실행 (aero-twin-agent 폴더에서): python model/Baseline/run_all.py <scheme>
     scheme = val | test | group | regime   (설명은 common.py)
-결과: model/Baseline/results/<scheme>/raw.csv (모델 × seed 별 지표), summary.csv (평균 ± 표준편차)
-4가지를 모두 돌린 뒤 report.py 로 통합 문서(results/results.md)를 만든다.
+결과: model/Baseline/results_v3/<scheme>/raw.csv (모델 × seed 별 지표), summary.csv (평균 ± 표준편차)
+4가지를 모두 돌린 뒤 report.py 로 통합 문서(results_v3/results.md)를 만든다.
 """
 import sys
 from functools import partial
-from pathlib import Path
 
 import pandas as pd
 
@@ -18,7 +17,7 @@ import mlp
 import rom
 import tree_gbm
 import tree_rf
-from common import SEEDS, evaluate, load_data
+from common import RESULTS, SEEDS, evaluate, load_data
 
 BASELINES = {
     "Linear": linear.run,
@@ -30,24 +29,22 @@ BASELINES = {
 MODELS = {
     **BASELINES,
     "ROM": rom.run,
-    **{name: partial(looped.run, loop_steps=n, train_physics=tp, infer_physics=ip)
-       for name, (n, tp, ip) in looped.VARIANTS.items()},
+    **{name: partial(looped.run, train_loops=t, infer_loops=i, physics=p)
+       for name, (t, i, p) in looped.VARIANTS.items()},
 }
 
 
 def main(scheme):
     data = load_data(scheme)
-    # InferOff(조건 불일치) 는 val 에서 이미 문제를 확인했으므로 나머지 평가에서는 생략
-    models = {k: v for k, v in MODELS.items() if scheme == "val" or not k.endswith("InferOff")}
     print(f"[{scheme}] train {len(data.x_train)} / eval {len(data.x_eval)}", flush=True)
 
     rows = []
-    for name, run in models.items():
+    for name, run in MODELS.items():
         for seed in SEEDS:
             print(f"[{scheme}] running {name} seed={seed}", flush=True)
             rows.append({"model": name, "seed": seed, **evaluate(run(data, seed), data)})
 
-    out = Path(__file__).resolve().parent / "results" / scheme
+    out = RESULTS / scheme
     out.mkdir(parents=True, exist_ok=True)
     raw = pd.DataFrame(rows)
     raw.to_csv(out / "raw.csv", index=False)

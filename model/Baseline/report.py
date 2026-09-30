@@ -1,15 +1,17 @@
-"""[통합 문서] 4가지 평가 결과(results/<scheme>/raw.csv)를 모아 results/results.md 하나로 정리한다.
+"""[통합 문서] 4가지 평가 결과(results_v3/<scheme>/raw.csv)를 모아 results_v3/results.md 하나로 정리한다.
 실행: python model/Baseline/report.py   (run_all.py 로 4가지 scheme 을 먼저 돌려야 함)
+V1 결과(results/<scheme>/raw.csv)의 LT-3 과 V3 LT 를 비교하는 표도 함께 만든다.
 """
 from pathlib import Path
 
 import pandas as pd
 
-from common import load_data
+from common import RESULTS, load_data
 
-RES = Path(__file__).resolve().parent / "results"
+RES = RESULTS
+RES_V1 = Path(__file__).resolve().parent / "results"
 BASELINES = ["Linear", "RandomForest", "GradientBoosting", "GPR", "MLP"]
-LT_EVAL = ["LT-3", "LT-6", "LT-12"]
+LT_EVAL = ["LT-v3", "LT-v3-i12"]
 SHOW = ["std_MSE", "mean_MAPE", "W_MAPE", "D_MAPE", "A_MAPE", "W_MAE", "D_MAE", "A_MAE"]
 
 SCHEMES = {   # scheme: (이름, 무엇을 확인하나)
@@ -19,7 +21,9 @@ SCHEMES = {   # scheme: (이름, 무엇을 확인하나)
     "regime": ("④ 영역 이동 (conduction → keyhole)", "처음 보는 영역에서도 버티는지 (외삽)"),
 }
 
-HEADER = """# Baseline 비교 결과 (4가지 평가 통합)
+HEADER = """# Baseline 비교 결과 — L/T V3 (4가지 평가 통합)
+
+> V1 (Rosenthal 평가기, loop 3/6/12) 결과는 `../results/results.md` 참고. 이 문서 끝의 "V1 → V3" 표에서 두 버전의 LT 를 비교한다.
 
 ## 평가 방식 한눈에
 | 평가 | 설명 |
@@ -33,6 +37,8 @@ HEADER = """# Baseline 비교 결과 (4가지 평가 통합)
 - 입력 7개 (P, v, d, t, E_L, Pe, H*) → 출력 3개 (W, R = D/W, A). 표준화 기준은 각 평가의 train 으로만 계산
 - 반복: 모델 seed 0~4 로 5회 → 평균 ± 표준편차 (데이터 분할은 평가마다 고정)
 - 신경망(MLP, LT): AdamW, lr 1e-3, batch 64, 100 epoch 고정 (평가 데이터로 best epoch 를 고르지 않음)
+- LT V3 설정: `looped_transformer_v3.pt` 에 저장된 학습 인자와 같음 (학습 loop 10, fluid 평가기 residual 7개, physics_alpha 0.1).
+  단, 체크포인트는 val 기준 조기 종료(patience 20)로 epoch 를 골랐지만 여기서는 위 규칙대로 100 epoch 고정
 
 ## 지표
 | 지표 | 뜻 |
@@ -51,9 +57,9 @@ HEADER = """# Baseline 비교 결과 (4가지 평가 통합)
 | GPR | 비슷한 입력 → 비슷한 출력 가정(kernel). 소량 데이터에 강함 | RBF + 노이즈 |
 | MLP | 3층 신경망 (기준이 `StateMLP`) | LT 와 같은 학습 설정 |
 | ROM | 학습 없이 물리식만으로 계산 (Rosenthal W, H*·Pe 깊이, 반타원 A) | 참고용 |
-| LT-k | Looped Transformer, loop k 회. 학습 · 추론 모두 물리 피드백 | **평가 대상** |
-| LT-3-NoPhys | 학습 · 추론 모두 물리 피드백 없음 | 내부 비교: LT-3 과의 차이 = 물리 피드백 효과 |
-| LT-k-InferOff | 학습은 물리 피드백, 추론은 끔 (`interfaceLT.py` 방식) | 조건 불일치 참고용 (① 에서만 실행) |
+| LT-v3 | Looped Transformer V3. 학습 · 추론 loop 10, 학습 · 추론 모두 fluid 평가기 | **평가 대상** |
+| LT-v3-i12 | 같은 학습, 추론만 loop 12 (`interfaceLT.py` 설정) | **평가 대상** |
+| LT-v3-NoPhys | 물리 피드백 · 물리 loss 없음 (loop 10) | 내부 비교: LT-v3 과의 차이 = 물리의 효과 |
 """
 
 
@@ -103,6 +109,14 @@ def main():
                                 for lt in LT_EVAL})
         parts += [f"\n---\n\n## {name}\n{purpose}\n\n![{name}](figures/{s}.png)\n\n### 주요 지표\n\n", to_md(table),
                   "\n### baseline 별 LT 개선률 (%)\n\n", to_md(improve, "baseline")]
+
+    # V1 → V3: V1 LT-3 (results/) 과 V3 LT 의 std_MSE 비교. baseline 코드는 두 버전이 같다
+    v1 = {s: pd.read_csv(RES_V1 / s / "raw.csv").groupby("model")["std_MSE"].mean() for s in SCHEMES}
+    v1v3 = pd.DataFrame({SCHEMES[s][0]: {"V1 LT-3": round(v1[s]["LT-3"], 3),
+                                          **{f"V3 {lt}": round(means[s].loc[lt, "std_MSE"], 3) for lt in LT_EVAL},
+                                          "최강 baseline": round(means[s]["std_MSE"][BASELINES].min(), 3)}
+                         for s in SCHEMES}).T
+    parts += ["\n---\n\n## V1 → V3: LT std_MSE 비교 (낮을수록 좋음)\n\n", to_md(v1v3, "평가")]
 
     (RES / "results.md").write_text("".join(parts), encoding="utf-8")
     print("written:", RES / "results.md")
