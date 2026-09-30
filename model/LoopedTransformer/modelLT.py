@@ -4,8 +4,8 @@
 # 유의해야할 점: 기존 Transformer 모델과 달리 이 Proj의 Transformer의 sequence는 데이터의 시간축이 아니라 추론 iteration이다.
 
 # Mathmatical Modeling
-# x=[P,v,d,t]
-# y=[W,D,A]
+# x=[P,v,d,t,E_L,Pe,H*]   (공정조건 4 + 파생 feature 3)
+# y=[W,R,A]               (R = D/W)
 #
 # x→fθ​(x)→y^​0​
 # r0​=PhysicsEvaluator(x,y^​0​)
@@ -36,10 +36,10 @@ class FeatureTokenizer(nn.Module):
     스칼라값 to 토큰
 
     Input:
-        [B, 4]
+        [B, n_features]   (현재 7)
 
     Output:
-        [B, 4, d_model]
+        [B, n_features, d_model]
     """
 
     def __init__(self, n_features: int, d_model: int):
