@@ -11,7 +11,6 @@
 - 신경망 학습 설정: 기준이 L_T.ipynb 와 동일 (AdamW, lr 1e-3, batch 64, gamma 0.8, grad clip 1.0)
     단, val 로 best epoch 를 고르지 않고 100 epoch 고정 학습
 """
-import copy
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -32,7 +31,6 @@ RESULTS = Path(__file__).resolve().parent / "results_v3"   # V1 결과는 result
 SPLIT_SEED = 42            # 데이터 분할 seed (기준이 설정과 동일, 고정)
 SEEDS = [0, 1, 2, 3, 4]    # 반복 실험용 모델 seed
 EPOCHS = 100
-PATIENCE = 20              # 실험 c 전용: val loss 가 20 epoch 동안 개선되지 않으면 중단 (기준이 노트북과 같음)
 
 
 def _group_split(df):
@@ -80,19 +78,15 @@ def train_nn(model, data, forward):
     """신경망 공통 학습 루프.
     forward(model, x) 는 (예측 리스트, 추가 loss) 를 반환해야 한다
     (MLP 는 ([pred], 0), LT 는 (루프 단계별 예측 전체, physics_alpha * 물리 loss)).
-    loss = 기준이 코드와 같은 DeepSupervisionLoss + 추가 loss.
-    data 에 x_sel, y_sel 이 있으면 (실험 c) 기준이 노트북처럼 val 데이터 loss 가 가장 낮은 epoch 의
-    가중치를 쓰고, PATIENCE epoch 동안 개선이 없으면 멈춘다. 없으면 EPOCHS 고정."""
+    loss = 기준이 코드와 같은 DeepSupervisionLoss + 추가 loss."""
     loader = DataLoader(
         TensorDataset(torch.from_numpy(data.x_train), torch.from_numpy(data.y_train)),
         batch_size=64, shuffle=True,
     )
     loss_fn = DeepSupervisionLoss(gamma=0.8)
     opt = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
-    sel = getattr(data, "x_sel", None)
-    best, best_state, wait = float("inf"), None, 0
+    model.train()
     for _ in range(EPOCHS):
-        model.train()
         for xb, yb in loader:
             opt.zero_grad()
             preds, extra_loss = forward(model, xb)
@@ -100,19 +94,6 @@ def train_nn(model, data, forward):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
-        if sel is None:
-            continue
-        model.eval()
-        with torch.no_grad():
-            val_loss = loss_fn(forward(model, torch.from_numpy(sel))[0], torch.from_numpy(data.y_sel)).item()
-        if val_loss < best:
-            best, best_state, wait = val_loss, copy.deepcopy(model.state_dict()), 0
-        else:
-            wait += 1
-            if wait >= PATIENCE:
-                break
-    if best_state is not None:
-        model.load_state_dict(best_state)
     model.eval()
     return model
 
