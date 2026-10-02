@@ -2,11 +2,15 @@ import asyncio
 import math
 import time
 from dataclasses import dataclass, asdict
+from datetime import datetime, timezone
 from typing import Set
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
+from .lt_contracts import GeometryPredictor
+from .lt_predictor import V5StreamingLTPredictor
 
 app = FastAPI(title="Physical AI Digital Twin")
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
@@ -24,8 +28,10 @@ class EquipmentState:
     machine: dict
 
 class LPBFCellSimulation:
-    def __init__(self):
+    def __init__(self, geometry_predictor: GeometryPredictor):
+        self.geometry_predictor = geometry_predictor
         self.elapsed_s = 0.0
+        self.event_counter = 0
         self.start_layer = 41
         self.layer_count = 120
         self.track_count = 120
@@ -50,9 +56,25 @@ class LPBFCellSimulation:
         build_progress = (layer_index + layer_progress) / self.layer_count * 100
         chamber_temperature = 28.0 + 0.35 * math.sin(self.elapsed_s / 18)
         oxygen_ppm = 82.0 + 3.0 * math.sin(self.elapsed_s / 7)
+        timestamp = time.time()
+        job_id = f"LPBF-316L-{42 + job_cycle:03d}"
+        self.event_counter += 1
+        process_input = {
+            "P_laser": 250.0,
+            "v_scan": self.scan_speed_mm_s,
+            "d_laser": 0.1,
+            "t_powder": 30.0,
+        }
+        geometry = self.geometry_predictor.predict({
+            **process_input,
+            "event_id": f"{job_id}:{self.event_counter}",
+            "job_id": job_id,
+            "timestamp": datetime.fromtimestamp(timestamp, timezone.utc).isoformat(),
+            "delta_t": dt,
+        })
 
         return EquipmentState(
-            timestamp=time.time(),
+            timestamp=timestamp,
             equipment_id="LBFP-01",
             state="RUNNING",
             position={"x": x, "y": y, "z": z},
@@ -63,16 +85,15 @@ class LPBFCellSimulation:
             },
             force={"fx": 0.0, "fy": 0.0, "fz": 0.0},
             process={
-                "laser_power": 250.0,
+                "laser_power": process_input["P_laser"],
                 "scan_speed": self.scan_speed_mm_s,
-                "spot_diameter": 0.1,
-                "melt_width": 117.3,
-                "aspect_ratio": 0.824,
-                "melt_area": 9203.4,
+                "spot_diameter": process_input["d_laser"],
+                "powder_layer_thickness_um": process_input["t_powder"],
                 "track_spacing": self.track_pitch_mm * 1000,
+                **geometry.as_process_fields(),
             },
             build={
-                "job_id": f"LPBF-316L-{42 + job_cycle:03d}",
+                "job_id": job_id,
                 "material": "316L",
                 "layer_current": layer_index + 1,
                 "layer_total": self.layer_count,
@@ -92,7 +113,7 @@ class LPBFCellSimulation:
             },
         )
 
-dt = LPBFCellSimulation()
+dt = None
 clients: Set[WebSocket] = set()
 latest = None
 
@@ -118,7 +139,7 @@ async def websocket_dt(ws: WebSocket):
 async def simulation_loop():
     global latest
     while True:
-        latest = dt.step()
+        latest = await asyncio.to_thread(dt.step)
         dead = []
         payload = asdict(latest)
         for ws in clients:
@@ -132,4 +153,6 @@ async def simulation_loop():
 
 @app.on_event("startup")
 async def startup():
+    global dt
+    dt = LPBFCellSimulation(V5StreamingLTPredictor.from_artifacts())
     asyncio.create_task(simulation_loop())
