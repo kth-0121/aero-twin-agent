@@ -2,3 +2,11 @@ numpy
 torch
 streamlit
 requests
+pandas
+scikit-learn
+scipy
+matplotlib
+joblib
+fastapi
+uvicorn[standard]
+pybullet
