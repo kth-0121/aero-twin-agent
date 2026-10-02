@@ -13,9 +13,9 @@ import torch
 import pandas as pd
 import numpy as np
 
-import dataLT
-import modelLT
-import physicsLT
+import model.LoopedTransformer.legacy.dataLT as dataLT
+import model.LoopedTransformer.legacy.modelLT as modelLT
+import model.LoopedTransformer.legacy.physicsLT as physicsLT
 
 FEATURES = dataLT.FEATURES
 TARGETS = dataLT.TARGETS
