@@ -124,6 +124,12 @@ area_um2 = float(prediction.iloc[0]["melt_area"])
 
 ## 7. DT 백엔드 권장 연동 흐름
 
+### 7.1 현재 DT Adapter 공통 I/O
+
+`digitaltwin.backend.lt_contracts`는 `LTRequest`와 `LTResponse`로 Adapter 경계를 정의한다. 요청은 원시 공정조건(`P_laser`, `v_scan`, `d_laser`, `t_powder`)과 선택 메타데이터(`event_id`, `job_id`, `timestamp`, `delta_t`)를 담으며, `LTRequest.from_event()`로 기존 mapping 입력을 변환할 수 있다. Adapter는 서비스 호출 전 필수 특성 및 유한한 숫자 입력을 확인한다.
+
+`V5StreamingLTPredictor.predict_result()`는 `status`가 `ok` 또는 `error`인 `LTResponse`를 반환하며, 두 상태 모두 `model_version`을 포함한다. 성공 결과에는 `GeometryPrediction`, 실패 결과에는 오류 문자열이 포함된다. 체크포인트의 `model_version`이 없으면 `LT-V5`를 사용한다. 기존 DT `GeometryPredictor` 호출부를 위한 `predict()`는 성공 시 `GeometryPrediction`을 반환하고 오류 시 예외를 발생시키므로, 상태형 처리가 필요한 파이프라인 경계에서는 `predict_result()`를 사용한다.
+
 1. **입력 검증:** 출력, 속도, 스폿 직경, 분말층 두께의 누락·비수치·비양수 값을 거부하고 지원 데이터 범위를 벗어난 조건은 외삽 경고로 표시한다.
 2. **특성 생성 및 추론:** 원시 조건으로 위의 3개 파생 특성을 계산하고, `RUN.getPredict()`에 한 행 또는 배치 DataFrame으로 전달한다.
 3. **출력 변환:** `depth_um = width_um * aspect_ratio`를 계산하되 원본 모델 출력도 유지한다.

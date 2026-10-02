@@ -1,7 +1,7 @@
 """Qualitative transient thermal field driven by CLI scan events using FiPy."""
 
 from dataclasses import dataclass
-from math import ceil, exp, isfinite, sqrt
+from math import ceil, isfinite, sqrt
 
 import numpy as np
 
@@ -12,9 +12,10 @@ from .process import BuildSettings
 @dataclass(frozen=True)
 class ThermalSnapshot:
     event_id: str
-    peak_temperature_c: float
     hot_cell_count: int
-    melt_threshold_cell_count: int
+    reference_threshold_cell_count: int
+    hot_cell_fraction: float
+    reference_threshold_cell_fraction: float
     grid_shape: tuple[int, int]
     cell_size_mm: tuple[float, float]
 
@@ -52,9 +53,6 @@ class FiPyThermalTwin:
             raise RuntimeError("FiPy DT requires fipy; install digitaltwin/requirements.txt") from exc
 
         self.settings = settings
-        self._cell_variable = CellVariable
-        self._diffusion_term = DiffusionTerm
-        self._transient_term = TransientTerm
         self.width_m = build_width_mm / 1000.0
         self.depth_m = build_depth_mm / 1000.0
         target_cell_m = resolution_mm / 1000.0
@@ -145,12 +143,17 @@ class FiPyThermalTwin:
             )
 
         temperatures_k = self.temperature.value
-        peak_k = float(np.max(temperatures_k))
+        cell_count = int(temperatures_k.size)
+        hot_cell_count = int(np.count_nonzero(temperatures_k > self.preheat_k + 25.0))
+        reference_threshold_cell_count = int(
+            np.count_nonzero(temperatures_k >= self.melt_threshold_k)
+        )
         return ThermalSnapshot(
             event_id=event.event_id,
-            peak_temperature_c=peak_k - 273.15,
-            hot_cell_count=int(np.count_nonzero(temperatures_k > self.preheat_k + 25.0)),
-            melt_threshold_cell_count=int(np.count_nonzero(temperatures_k >= self.melt_threshold_k)),
+            hot_cell_count=hot_cell_count,
+            reference_threshold_cell_count=reference_threshold_cell_count,
+            hot_cell_fraction=hot_cell_count / cell_count,
+            reference_threshold_cell_fraction=reference_threshold_cell_count / cell_count,
             grid_shape=(self.nx, self.ny),
             cell_size_mm=(self.dx_m * 1000, self.dy_m * 1000),
         )

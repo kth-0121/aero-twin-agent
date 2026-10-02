@@ -63,7 +63,7 @@ class PreLTDigitalTwin:
 
     def consume(self, event: BuildEvent) -> PreLTResult:
         thermal = self.thermal.consume(event)
-        self.scene.consume(event, peak_temperature_c=thermal.peak_temperature_c)
+        self.scene.consume(event)
         return PreLTResult(event=event, thermal=thermal)
 
     def run(self, *, event_limit: int | None = None) -> Iterator[PreLTResult]:

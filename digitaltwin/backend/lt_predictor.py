@@ -5,16 +5,23 @@ from typing import Mapping
 
 import numpy as np
 
-from .lt_contracts import GeometryPrediction, PROCESS_FEATURES
+from .lt_contracts import (
+    GeometryPrediction,
+    LTRequest,
+    LTResponse,
+    PROCESS_FEATURES,
+    TARGETS,
+)
 from .sensors import SyntheticSensorProvider
 
 
 class V5StreamingLTPredictor:
     """Adapt the trained V5 streaming service to the digital-twin contract."""
 
-    def __init__(self, service, sensor_provider):
+    def __init__(self, service, sensor_provider, model_version="LT-V5"):
         self.service = service
         self.sensor_provider = sensor_provider
+        self.model_version = str(model_version)
         self.event_counter = 0
 
     @classmethod
@@ -88,36 +95,81 @@ class V5StreamingLTPredictor:
         sensor_provider = SyntheticSensorProvider(
             dataset[list(PROCESS_FEATURES)].to_numpy(dtype=float), seed=SEED
         )
-        return cls(service, sensor_provider)
+        return cls(
+            service,
+            sensor_provider,
+            model_version=str(checkpoint.get("model_version", "LT-V5")),
+        )
+
+    def predict_result(self, request: LTRequest | Mapping[str, object]) -> LTResponse:
+        if isinstance(request, LTRequest):
+            lt_request = request
+        else:
+            try:
+                lt_request = LTRequest.from_event(request)
+            except (TypeError, ValueError) as exc:
+                return LTResponse(
+                    status="error",
+                    model_version=self.model_version,
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+
+        event_id = lt_request.event_id
+        try:
+            missing = [name for name in PROCESS_FEATURES if name not in lt_request.process]
+            if missing:
+                raise ValueError(f"Missing LT process inputs: {missing}")
+            process = {name: float(lt_request.process[name]) for name in PROCESS_FEATURES}
+            if not np.isfinite(list(process.values())).all():
+                raise ValueError("LT process inputs must be finite")
+            if lt_request.delta_t is not None and not np.isfinite(lt_request.delta_t):
+                raise ValueError("LT delta_t must be finite")
+
+            self.event_counter += 1
+            sensor_values = self.sensor_provider.observe(process)
+            service_event = {
+                **lt_request.as_event(),
+                **process,
+                **sensor_values,
+                "event_id": event_id or f"dt:{self.event_counter}",
+                "job_id": lt_request.job_id or "digital-twin",
+            }
+            result = self.service.process_event(service_event)
+            prediction = result["prediction"]
+            width = float(prediction[TARGETS[0]])
+            depth = float(prediction[TARGETS[1]])
+            area = float(prediction[TARGETS[2]])
+            if not np.isfinite([width, depth, area]).all() or min(width, depth, area) <= 0:
+                raise RuntimeError("LT returned non-finite or non-positive geometry")
+
+            geometry = GeometryPrediction(
+                width_um=width,
+                depth_um=depth,
+                area_um2=area,
+                drift_score=float(result["drift_score"]),
+                drift_warning=bool(result["drift_warning"]),
+                uncertainty_sigma_approx=result["uncertainty_sigma_approx"],
+                loop_predictions=tuple(result["loop_predictions"]),
+                sensor_source=self.sensor_provider.source,
+                model_version=self.model_version,
+            )
+            return LTResponse(
+                status="ok",
+                model_version=self.model_version,
+                prediction=geometry,
+                event_id=service_event["event_id"],
+            )
+        except Exception as exc:
+            return LTResponse(
+                status="error",
+                model_version=self.model_version,
+                error=f"{type(exc).__name__}: {exc}",
+                event_id=event_id,
+            )
 
     def predict(self, event: Mapping[str, object]) -> GeometryPrediction:
-        from model.LoopedTransformer.v5.config import TARGETS
-
-        self.event_counter += 1
-        process = {name: float(event[name]) for name in PROCESS_FEATURES}
-        sensor_values = self.sensor_provider.observe(process)
-        service_event = {
-            **event,
-            **process,
-            **sensor_values,
-            "event_id": str(event.get("event_id", f"dt:{self.event_counter}")),
-            "job_id": str(event.get("job_id", "digital-twin")),
-        }
-        result = self.service.process_event(service_event)
-        prediction = result["prediction"]
-        width = float(prediction[TARGETS[0]])
-        depth = float(prediction[TARGETS[1]])
-        area = float(prediction[TARGETS[2]])
-        if not np.isfinite([width, depth, area]).all() or min(width, depth, area) <= 0:
-            raise RuntimeError("LT returned non-finite or non-positive geometry")
-
-        return GeometryPrediction(
-            width_um=width,
-            depth_um=depth,
-            area_um2=area,
-            drift_score=float(result["drift_score"]),
-            drift_warning=bool(result["drift_warning"]),
-            uncertainty_sigma_approx=result["uncertainty_sigma_approx"],
-            loop_predictions=tuple(result["loop_predictions"]),
-            sensor_source=self.sensor_provider.source,
-        )
+        response = self.predict_result(event)
+        if response.status == "error":
+            raise RuntimeError(response.error)
+        assert response.prediction is not None
+        return response.prediction

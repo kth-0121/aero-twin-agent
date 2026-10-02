@@ -1,7 +1,9 @@
 """Build configuration contracts for the 316L LPBF demonstration."""
 
+import json
 from dataclasses import dataclass
 from math import isfinite
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -173,3 +175,83 @@ def demo_316l_settings() -> BuildSettings:
             build_height_mm=300.0,
         ),
     )
+
+
+def load_build_settings(path: str | Path) -> BuildSettings:
+    """Load a complete machine/material profile from JSON and validate it."""
+    profile_path = Path(path)
+    data = json.loads(profile_path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("build profile root must be a JSON object")
+
+    def section(name: str) -> dict:
+        value = data.get(name)
+        if not isinstance(value, dict):
+            raise ValueError(f"build profile must contain object '{name}'")
+        return value
+
+    def text(values: dict, name: str) -> str:
+        value = values.get(name)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"profile field '{name}' must be a non-empty string")
+        return value
+
+    def number(values: dict, name: str) -> float:
+        value = values.get(name)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"profile field '{name}' must be a number")
+        return float(value)
+
+    powder = section("powder")
+    process = section("process")
+    supports = section("supports")
+    chamber = section("chamber")
+    machine = section("machine")
+    reuse_count = powder.get("reuse_count")
+    removal_access_required = supports.get("removal_access_required")
+    if isinstance(reuse_count, bool) or not isinstance(reuse_count, int):
+        raise ValueError("profile field 'reuse_count' must be an integer")
+    if not isinstance(removal_access_required, bool):
+        raise ValueError("profile field 'removal_access_required' must be a boolean")
+
+    settings = BuildSettings(
+        job_id=text(data, "job_id"),
+        material=text(data, "material"),
+        powder=PowderProfile(
+            material=text(powder, "material"),
+            lot_id=text(powder, "lot_id"),
+            particle_d10_um=number(powder, "particle_d10_um"),
+            particle_d50_um=number(powder, "particle_d50_um"),
+            particle_d90_um=number(powder, "particle_d90_um"),
+            oxygen_ppm=number(powder, "oxygen_ppm"),
+            reuse_count=reuse_count,
+            data_origin=text(powder, "data_origin"),
+        ),
+        process=ProcessSettings(
+            laser_power_w=number(process, "laser_power_w"),
+            scan_speed_mm_s=number(process, "scan_speed_mm_s"),
+            hatch_spacing_mm=number(process, "hatch_spacing_mm"),
+            layer_thickness_um=number(process, "layer_thickness_um"),
+            spot_diameter_mm=number(process, "spot_diameter_mm"),
+            preheat_temperature_c=number(process, "preheat_temperature_c"),
+        ),
+        supports=SupportSettings(
+            strategy=text(supports, "strategy"),
+            density_percent=number(supports, "density_percent"),
+            contact_diameter_mm=number(supports, "contact_diameter_mm"),
+            removal_access_required=removal_access_required,
+        ),
+        chamber=ChamberSettings(
+            shielding_gas=text(chamber, "shielding_gas"),
+            oxygen_limit_ppm=number(chamber, "oxygen_limit_ppm"),
+            oxygen_measured_ppm=number(chamber, "oxygen_measured_ppm"),
+        ),
+        machine=MachineSettings(
+            machine_id=text(machine, "machine_id"),
+            build_width_mm=number(machine, "build_width_mm"),
+            build_depth_mm=number(machine, "build_depth_mm"),
+            build_height_mm=number(machine, "build_height_mm"),
+        ),
+    )
+    settings.validate()
+    return settings

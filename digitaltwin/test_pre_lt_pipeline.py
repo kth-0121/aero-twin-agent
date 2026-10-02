@@ -1,20 +1,28 @@
 """Focused tests for the STL/CLI path and pre-LT DT boundary."""
 
-from dataclasses import replace
+from dataclasses import asdict, replace
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-import numpy as np
 import trimesh
 
 from digitaltwin.build_job import create_build_plan, load_cli_build_plan
 from digitaltwin.cli_toolpath import LayerPaths, read_cli, write_cli
 from digitaltwin.pre_lt_dt import PreLTDigitalTwin
-from digitaltwin.process import demo_316l_settings
+from digitaltwin.process import demo_316l_settings, load_build_settings
 
 
 class PreLTPipelineTests(unittest.TestCase):
+    def test_json_build_profile_roundtrip(self):
+        settings = demo_316l_settings()
+        with TemporaryDirectory() as directory:
+            profile_path = Path(directory) / "profile.json"
+            profile_path.write_text(json.dumps(asdict(settings)), encoding="utf-8")
+            loaded = load_build_settings(profile_path)
+        self.assertEqual(loaded, settings)
+
     def test_cli_roundtrip_and_centered_events(self):
         with TemporaryDirectory() as directory:
             cli_path = Path(directory) / "offset.cli"
@@ -64,8 +72,11 @@ class PreLTPipelineTests(unittest.TestCase):
 
             self.assertEqual(len(results), 2)
             for result in results:
-                self.assertTrue(np.isfinite(result.thermal.peak_temperature_c))
-                self.assertGreaterEqual(result.thermal.peak_temperature_c, 100.0)
+                self.assertGreaterEqual(result.thermal.hot_cell_fraction, 0.0)
+                self.assertLessEqual(result.thermal.hot_cell_fraction, 1.0)
+                self.assertGreaterEqual(result.thermal.reference_threshold_cell_fraction, 0.0)
+                self.assertLessEqual(result.thermal.reference_threshold_cell_fraction, 1.0)
+                self.assertFalse(hasattr(result.thermal, "peak_temperature_c"))
 
 
 if __name__ == "__main__":

@@ -87,7 +87,7 @@ class PyBulletBuildScene:
         )
         return self.part_id
 
-    def consume(self, event: BuildEvent, *, peak_temperature_c: float | None = None) -> None:
+    def consume(self, event: BuildEvent) -> None:
         bullet = self.bullet
         x0, y0, z = event.start_mm
         x1, y1, _ = event.end_mm
@@ -101,12 +101,7 @@ class PyBulletBuildScene:
             max(process.hatch_spacing_mm / 2, 0.025),
             max(process.layer_thickness_um / 2000, 0.015),
         )
-        if peak_temperature_c is None:
-            color = (0.25, 0.78, 0.67, 0.9) if event.path_type == "hatch" else (0.36, 0.70, 0.84, 0.9)
-        elif peak_temperature_c >= 1426.85:
-            color = (0.95, 0.30, 0.20, 0.95)
-        else:
-            color = (0.92, 0.66, 0.24, 0.9)
+        color = (0.25, 0.78, 0.67, 0.9) if event.path_type == "hatch" else (0.36, 0.70, 0.84, 0.9)
         visual = bullet.createVisualShape(
             bullet.GEOM_BOX,
             halfExtents=half_extents,

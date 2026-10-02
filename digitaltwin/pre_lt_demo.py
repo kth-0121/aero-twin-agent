@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .build_job import create_build_plan, load_cli_build_plan
 from .pre_lt_dt import PreLTDigitalTwin
-from .process import demo_316l_settings
+from .process import demo_316l_settings, load_build_settings
 
 
 def main() -> None:
@@ -15,6 +15,7 @@ def main() -> None:
     parser.add_argument("--source-units", choices=("mm", "cm", "m", "in"), default="mm")
     parser.add_argument("--cli-input", type=Path, help="use a CLI file produced by an external slicer")
     parser.add_argument("--cli-output", type=Path, help="where generated CLI is written (defaults beside STL)")
+    parser.add_argument("--profile-json", type=Path, help="machine/material profile with certified build settings")
     parser.add_argument("--event-limit", type=int, default=100)
     parser.add_argument("--thermal-resolution-mm", type=float, default=0.25)
     parser.add_argument("--gui", action="store_true", help="show PyBullet GUI and play at scan-time speed")
@@ -25,8 +26,10 @@ def main() -> None:
         parser.error(f"STL file not found: {args.stl}; pass the path to an existing STL file")
     if args.cli_input and not args.cli_input.is_file():
         parser.error(f"CLI file not found: {args.cli_input}; pass the path to an existing CLI file")
+    if args.profile_json and not args.profile_json.is_file():
+        parser.error(f"profile JSON not found: {args.profile_json}")
 
-    settings = demo_316l_settings()
+    settings = load_build_settings(args.profile_json) if args.profile_json else demo_316l_settings()
     if args.cli_input:
         plan = load_cli_build_plan(args.cli_input, settings)
     else:
@@ -46,6 +49,13 @@ def main() -> None:
         f"powder={settings.powder.lot_id} ({settings.powder.data_origin}); "
         f"purge={'ready' if settings.chamber.purge_complete else 'blocked'}"
     )
+    print(
+        f"process={settings.process.laser_power_w:g} W / "
+        f"{settings.process.scan_speed_mm_s:g} mm/s / "
+        f"hatch={settings.process.hatch_spacing_mm:g} mm / "
+        f"layer={settings.process.layer_thickness_um:g} um / "
+        f"preheat={settings.process.preheat_temperature_c:g} C"
+    )
 
     connection_mode = None
     if args.gui:
@@ -63,7 +73,10 @@ def main() -> None:
             event = result.event
             print(
                 f"{event.event_index:06d} layer={event.layer_index + 1:04d} "
-                f"{event.path_type:7s} peak={result.thermal.peak_temperature_c:7.1f} C"
+                f"{event.path_type:7s} qualitative-hot-cells="
+                f"{result.thermal.hot_cell_fraction * 100:6.2f}% "
+                f"reference-threshold-cells="
+                f"{result.thermal.reference_threshold_cell_fraction * 100:6.2f}%"
             )
             if args.gui:
                 time.sleep(event.duration_s)
