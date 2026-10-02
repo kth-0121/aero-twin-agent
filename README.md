@@ -66,7 +66,7 @@ data/               316L 실측 melt pool 데이터 (CSV)
 sim/                LPBF 물리 ROM(lpbf.py) + 공정상태 판단·행동결정(decision.py)
 model/              physics-aware looped 코어(초기 버전) + baseline + 학습 스크립트
 model/LoopedTransformer/   문기준님 공식 Looped Transformer 모델 (인터페이스: interfaceLT.py)
-digitaltwin/        Digital Twin 구조 명세 (PyBullet 기반, 향후 확장용 가이드)
+digitaltwin/        STL/CLI 툴패스 + FiPy/PyBullet 기반 LT 이전 DT 모듈
 agent/              로컬 sLLM 도구호출 루프
 app.py              Streamlit 데모 대시보드
 DOCS/               개발계획서 등 공식 제출 문서
@@ -78,7 +78,9 @@ DOCS/               개발계획서 등 공식 제출 문서
   로컬에서 임시 수정 후 v2·v3 정상 동작 확인함 (아직 리포지토리에는 미반영)
 - `sim/decision.py`의 행동결정은 현재 `sim/lpbf.py`의 자체 ROM을 쓰고 있음 — 위 LT 모델 연동은
   인터페이스 확정 후 진행 예정
-- `digitaltwin/명세서.md`가 제안하는 PyBullet 기반 파이프라인은 아직 미착수 (참고 가이드로만 보관)
+- STL -> ASCII CLI -> 공정 이벤트 -> FiPy 열장/PyBullet 경로 재생의 LT 이전 모듈 구현 완료 (`digitaltwin/README.md`)
+- CLI/분말/공정 설정은 현재 316L 데모 프로파일이며, 분말 분포와 preheat는 장비 인증값이 아닌 명시적 데모 가정
+- FiPy 결과는 정성적 열 추세이고 PyBullet은 시각화용이며, LT 예측·결함 보증·장비 제어와 아직 연결되지 않음
 
 ## 데이터 출처
 - 316L 실측 melt pool 데이터: [Zenodo 16979848](https://zenodo.org/records/16979848) (Hofmann 2025, Aconity-Midi 장비, 677트랙/고유조건 623개, CC BY 4.0)

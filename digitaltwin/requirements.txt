@@ -5,3 +5,7 @@ torch
 pandas
 scikit-learn
 joblib
+trimesh
+shapely
+fipy
+pybullet
