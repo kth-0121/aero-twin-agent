@@ -10,7 +10,7 @@ from modelLT import StateMLP
 def run(data, seed):
     set_seed(seed)
     model = StateMLP(n_features=data.x_train.shape[1], state_dim=3)
-    train_nn(model, data, lambda m, x: [m(x)])   # 예측이 1개뿐이라 리스트로 감싸 loss 에 전달
+    train_nn(model, data, lambda m, x: ([m(x)], 0.0))   # 예측이 1개뿐이라 리스트로 감싸 전달, 추가 loss 없음
     with torch.no_grad():
         return model(torch.from_numpy(data.x_eval)).numpy()
 

@@ -27,6 +27,7 @@ import dataLT                                    # noqa: E402
 from lossLT import DeepSupervisionLoss           # noqa: E402
 
 DATA_PATH = ROOT / "data" / "316L_meltpool.csv"
+RESULTS = Path(__file__).resolve().parent / "results_v3"   # V1 결과는 results/ 에 보존
 SPLIT_SEED = 42            # 데이터 분할 seed (기준이 설정과 동일, 고정)
 SEEDS = [0, 1, 2, 3, 4]    # 반복 실험용 모델 seed
 EPOCHS = 100
@@ -75,8 +76,9 @@ def set_seed(seed):
 
 def train_nn(model, data, forward):
     """신경망 공통 학습 루프.
-    forward(model, x) 는 예측 리스트를 반환해야 한다 (MLP 는 [pred], LT 는 루프 단계별 예측 전체).
-    loss 는 기준이 코드와 같은 DeepSupervisionLoss (physics loss 는 alpha=0 이라 제외)."""
+    forward(model, x) 는 (예측 리스트, 추가 loss) 를 반환해야 한다
+    (MLP 는 ([pred], 0), LT 는 (루프 단계별 예측 전체, physics_alpha * 물리 loss)).
+    loss = 기준이 코드와 같은 DeepSupervisionLoss + 추가 loss."""
     loader = DataLoader(
         TensorDataset(torch.from_numpy(data.x_train), torch.from_numpy(data.y_train)),
         batch_size=64, shuffle=True,
@@ -87,7 +89,8 @@ def train_nn(model, data, forward):
     for _ in range(EPOCHS):
         for xb, yb in loader:
             opt.zero_grad()
-            loss = loss_fn(forward(model, xb), yb)
+            preds, extra_loss = forward(model, xb)
+            loss = loss_fn(preds, yb) + extra_loss
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
