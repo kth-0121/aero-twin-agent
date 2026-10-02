@@ -1,11 +1,9 @@
 import asyncio
+import math
 import time
-import threading
 from dataclasses import dataclass, asdict
 from typing import Set
 
-import pybullet as p
-import pybullet_data
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -22,44 +20,79 @@ class EquipmentState:
     velocity: dict
     force: dict
     process: dict
+    build: dict
+    machine: dict
 
-class PyBulletDT:
+class LPBFCellSimulation:
     def __init__(self):
-        self.client = p.connect(p.DIRECT)
-        p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        p.setGravity(0, 0, -9.81)
-        self.plane = p.loadURDF("plane.urdf")
-        self.body = p.loadURDF("r2d2.urdf", [0, 0, 0.5])
-        self.t = 0.0
-        self.lock = threading.Lock()
+        self.elapsed_s = 0.0
+        self.start_layer = 41
+        self.layer_count = 120
+        self.track_count = 120
+        self.track_length_mm = 76.0
+        self.track_pitch_mm = 0.6
+        self.scan_speed_mm_s = 800.0
+        self.layer_path_mm = self.track_count * self.track_length_mm
 
     def step(self, dt=1/30):
-        with self.lock:
-            # Demo motion: replace with the actual LBFP motion model later.
-            x = 0.5 * __import__('math').sin(self.t)
-            p.resetBasePositionAndOrientation(self.body, [x, 0, 0.5], [0, 0, 0, 1])
-            p.stepSimulation()
-            pos, _ = p.getBasePositionAndOrientation(self.body)
-            vel, _ = p.getBaseVelocity(self.body)
-            self.t += dt
+        self.elapsed_s += dt
+        total_distance_mm = self.elapsed_s * self.scan_speed_mm_s
+        completed_layers = int(total_distance_mm // self.layer_path_mm)
+        job_cycle, layer_index = divmod(self.start_layer + completed_layers, self.layer_count)
+        layer_offset_mm = total_distance_mm % self.layer_path_mm
+        track_index = int(layer_offset_mm // self.track_length_mm)
+        scan_offset_mm = layer_offset_mm % self.track_length_mm
+        reverse = (track_index + layer_index) % 2 == 1
+        x = 12.0 + (self.track_length_mm - scan_offset_mm if reverse else scan_offset_mm)
+        y = 12.0 + track_index * self.track_pitch_mm
+        z = (layer_index + 1) * 0.03
+        layer_progress = layer_offset_mm / self.layer_path_mm
+        build_progress = (layer_index + layer_progress) / self.layer_count * 100
+        chamber_temperature = 28.0 + 0.35 * math.sin(self.elapsed_s / 18)
+        oxygen_ppm = 82.0 + 3.0 * math.sin(self.elapsed_s / 7)
 
-            return EquipmentState(
-                timestamp=time.time(),
-                equipment_id="LBFP-001",
-                state="RUNNING",
-                position={"x": pos[0], "y": pos[1], "z": pos[2]},
-                velocity={"x": vel[0], "y": vel[1], "z": vel[2]},
-                force={"fx": 0.0, "fy": 0.0, "fz": 0.0},
-                process={
-                    "laser_power": 250.0,
-                    "scan_speed": 800.0,
-                    "melt_width": 117.3,
-                    "aspect_ratio": 0.824,
-                    "melt_area": 9203.4,
-                },
-            )
+        return EquipmentState(
+            timestamp=time.time(),
+            equipment_id="LBFP-01",
+            state="RUNNING",
+            position={"x": x, "y": y, "z": z},
+            velocity={
+                "x": -self.scan_speed_mm_s if reverse else self.scan_speed_mm_s,
+                "y": 0.0,
+                "z": 0.0,
+            },
+            force={"fx": 0.0, "fy": 0.0, "fz": 0.0},
+            process={
+                "laser_power": 250.0,
+                "scan_speed": self.scan_speed_mm_s,
+                "spot_diameter": 0.1,
+                "melt_width": 117.3,
+                "aspect_ratio": 0.824,
+                "melt_area": 9203.4,
+                "track_spacing": self.track_pitch_mm * 1000,
+            },
+            build={
+                "job_id": f"LPBF-316L-{42 + job_cycle:03d}",
+                "material": "316L",
+                "layer_current": layer_index + 1,
+                "layer_total": self.layer_count,
+                "track_current": track_index + 1,
+                "track_total": self.track_count,
+                "progress_pct": min(build_progress, 100.0),
+                "elapsed_s": 468.0 + self.elapsed_s,
+            },
+            machine={
+                "source": "SIMULATION",
+                "laser": "SCANNING",
+                "recoater": "STANDBY",
+                "chamber_temperature": chamber_temperature,
+                "oxygen_ppm": oxygen_ppm,
+                "filter_load_pct": 68.0,
+                "interlock": "CLOSED",
+            },
+        )
 
-dt = PyBulletDT()
+dt = LPBFCellSimulation()
 clients: Set[WebSocket] = set()
 latest = None
 
