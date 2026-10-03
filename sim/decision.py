@@ -1,15 +1,57 @@
 """공정 상태별 판단 + 행동 결정 (태훈 담당: Physics & Digital Twin Lead).
 
 현재 공정 조건을 평가해서 상태(정상/LOF위험/Keyhole위험)를 판단하고, 위험
-유형에 맞는 행동 후보를 생성한 뒤, 각 후보를 ROM(sim.lpbf)으로 가상 검증해서
-최선의 행동을 추천한다. 개발계획서 "나.개발방법" 문단의 행동결정 예시
+유형에 맞는 행동 후보를 생성한 뒤, 각 후보를 가상 검증해서 최선의 행동을
+추천한다. 개발계획서 "나.개발방법" 문단의 행동결정 예시
 (LOF 위험->파워 증가/속도 감소, Keyhole 위험->파워 감소/속도 증가) 그대로.
 
-ROM 자체가 곧 "Digital Twin 가상검증" 역할을 한다 -- 후보마다 assess_state()를
-다시 돌려서 실제로 위험이 해소되는지 확인하므로, 별도의 무거운 DT 컴포넌트를
-새로 만들 필요가 없다.
+폭/깊이 예측은 기준님의 공식 Looped Transformer(v3, model/LoopedTransformer/legacy/)를
+우선 사용한다 (digitaltwin/looped_transformer_integration.md 데이터 계약 참고).
+체크포인트가 없거나 로드에 실패하면 ROM(sim.lpbf)으로 자동 폴백한다 -- LOF
+판정·regime 분류 자체는 폭/깊이 소스와 무관하게 항상 ROM의 공식을 그대로 쓴다.
+
+2026-10-03: 기준님이 model/LoopedTransformer/를 리팩토링하면서 dataLT·interfaceLT·
+modelLT·physicsLT·v3 체크포인트를 legacy/ 하위로 옮김 (새 model/LoopedTransformer/v5/
+패키지는 실시간 스트림용 StreamingLTService라 이 모듈의 단발 호출 용도와는 다름).
+그래서 legacy 경로 + 절대 패키지 import로 맞춤.
 """
+import os
+
+import pandas as pd
+
 from sim.lpbf import melt_pool_width, melt_pool_depth, lof_risk, classify_regime
+
+_LT_DIR = os.path.join(os.path.dirname(__file__), "..", "model", "LoopedTransformer", "legacy")
+_LT_CHECKPOINT = os.path.join(_LT_DIR, "looped_transformer_v3.pt")
+
+try:
+    from model.LoopedTransformer.legacy.interfaceLT import RUN as _LTRun
+    _lt_runner = _LTRun()
+    _LT_AVAILABLE = os.path.exists(_LT_CHECKPOINT)
+except Exception:
+    _LT_AVAILABLE = False
+
+# dataLT.py가 학습 때 쓴 파생 특성 공식과 동일한 상수. sim/lpbf.py의 ROM 상수
+# (RHO=7900, CP=650, T_M=1700 등)와는 다른 값이므로 섞어 쓰면 안 됨.
+_ALPHA, _RHO, _CP, _TM, _T0, _ETA = 5.0e-6, 7800.0, 460.0, 1678.0, 293.15, 0.34
+
+
+def _lt_predict_width_depth(power_w, speed_mm_s, spot_diameter_um, layer_thickness_um):
+    """공정조건 한 건을 LT 입력 7특성으로 변환해 (width_m, depth_m) 예측."""
+    d_mm = spot_diameter_um / 1000.0
+    v_mps = speed_mm_s / 1000.0
+    d_m = d_mm / 1000.0
+    h_s_vol = _RHO * _CP * (_TM - _T0)
+    row = pd.DataFrame([{
+        "P_laser": power_w, "v_scan": speed_mm_s, "d_laser": d_mm, "t_powder": layer_thickness_um,
+        "linear_energy": power_w / speed_mm_s,
+        "peclet_number": v_mps * d_m / _ALPHA,
+        "normalized_enthalpy": _ETA * power_w / (h_s_vol * (_ALPHA * d_m ** 3 * v_mps) ** 0.5),
+    }])
+    pred = _lt_runner.getPredict(_LT_CHECKPOINT, row)
+    width_um = float(pred["melt_width"].iloc[0])
+    ratio = float(pred["aspect_ratio"].iloc[0])
+    return width_um * 1e-6, ratio * width_um * 1e-6
 
 ACTION_CANDIDATES = {
     "lof_risk": [
@@ -24,10 +66,18 @@ ACTION_CANDIDATES = {
 
 
 def assess_state(power_w, speed_mm_s, spot_diameter_um=100.0, hatch_um=100.0, layer_thickness_um=30.0):
-    """현재 공정조건의 상태를 판단: normal / lof_risk / keyhole_risk."""
+    """현재 공정조건의 상태를 판단: normal / lof_risk / keyhole_risk.
+    폭/깊이는 LT(v3) 예측 우선, 실패 시 ROM 폴백."""
     speed_m_s = speed_mm_s / 1000.0
-    w = melt_pool_width(power_w, speed_m_s)
-    d = melt_pool_depth(power_w, speed_m_s)
+    source = "lt_v3"
+    if _LT_AVAILABLE:
+        try:
+            w, d = _lt_predict_width_depth(power_w, speed_mm_s, spot_diameter_um, layer_thickness_um)
+        except Exception:
+            w, d, source = melt_pool_width(power_w, speed_m_s), melt_pool_depth(power_w, speed_m_s), "rom_fallback"
+    else:
+        w, d, source = melt_pool_width(power_w, speed_m_s), melt_pool_depth(power_w, speed_m_s), "rom_fallback"
+
     risk = lof_risk(hatch_um * 1e-6, layer_thickness_um * 1e-6, w, d)
     regime = str(classify_regime(power_w, speed_m_s, spot_diameter_um * 1e-6))
 
@@ -44,6 +94,7 @@ def assess_state(power_w, speed_mm_s, spot_diameter_um=100.0, hatch_um=100.0, la
         "width_um": round(float(w) * 1e6, 1),
         "lof_criterion": round(float(risk), 3),
         "regime": regime,
+        "source": source,
     }
 
 
