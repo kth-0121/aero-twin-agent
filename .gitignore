@@ -5,3 +5,6 @@ venv/
 .env
 .streamlit/
 digitaltwin/nozzle.preview.cli
+
+# DT 서버 실행 시 생성되는 이벤트 DB (model/.../stream_demo.sqlite 데모 파일은 별도로 추적 중)
+physical_ai_stream.sqlite
