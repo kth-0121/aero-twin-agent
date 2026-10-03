@@ -9,7 +9,7 @@ ROM 자체가 곧 "Digital Twin 가상검증" 역할을 한다 -- 후보마다 a
 다시 돌려서 실제로 위험이 해소되는지 확인하므로, 별도의 무거운 DT 컴포넌트를
 새로 만들 필요가 없다.
 """
-from sim.lpbf import melt_pool_width, melt_pool_depth, lof_risk, classify_regime
+from sim.lpbf import evaluate_physical_state, melt_pool_width, melt_pool_depth, lof_risk, classify_regime
 
 ACTION_CANDIDATES = {
     "lof_risk": [
@@ -81,6 +81,84 @@ def recommend_action(power_w, speed_mm_s, spot_diameter_um=100.0, hatch_um=100.0
                    f"{'안전 상태로 회복' if best['resolved'] else '위험이 완화되나 완전 해소는 아님'} "
                    f"(새 조건: {best['new_power_w']}W, {best['new_speed_mm_s']}mm/s)"),
         "candidates_evaluated": evaluated,
+    }
+
+
+def recommend_action_from_prediction(
+    power_w,
+    speed_mm_s,
+    spot_diameter_mm,
+    hatch_spacing_um,
+    layer_thickness_um,
+    predicted_width_um,
+    predicted_depth_um,
+):
+    """Use LT geometry for diagnosis and the ROM to validate bounded actions."""
+    state = evaluate_physical_state(
+        power_w,
+        speed_mm_s,
+        spot_diameter_mm,
+        hatch_spacing_um,
+        layer_thickness_um,
+        predicted_width_um,
+        predicted_depth_um,
+    )
+    if state["status"] == "normal":
+        return {
+            "current_state": state,
+            "recommended_action": "공정 유지",
+            "reason": "LT 예측 형상과 물리 제약이 설정된 정상 범위입니다.",
+            "candidates_evaluated": [],
+            "verification_model": "Rosenthal ROM",
+        }
+
+    bounds = {"power_w": (50.0, 500.0), "speed_mm_s": (100.0, 2000.0)}
+    candidates = []
+    for name, adjust in ACTION_CANDIDATES[state["status"]]:
+        candidate_power, candidate_speed = adjust(power_w, speed_mm_s)
+        if not (
+            bounds["power_w"][0] <= candidate_power <= bounds["power_w"][1]
+            and bounds["speed_mm_s"][0] <= candidate_speed <= bounds["speed_mm_s"][1]
+        ):
+            continue
+        rom_state = assess_state(
+            candidate_power,
+            candidate_speed,
+            spot_diameter_um=spot_diameter_mm * 1000.0,
+            hatch_um=hatch_spacing_um,
+            layer_thickness_um=layer_thickness_um,
+        )
+        candidates.append({
+            "action": name,
+            "laser_power_w": round(candidate_power, 1),
+            "scan_speed_mm_s": round(candidate_speed, 1),
+            "rom_state": rom_state,
+            "resolved": rom_state["status"] == "normal",
+        })
+
+    if not candidates:
+        return {
+            "current_state": state,
+            "recommended_action": "운전자 검토 필요",
+            "reason": "안전 범위 안에서 검증 가능한 행동 후보가 없습니다.",
+            "candidates_evaluated": [],
+            "verification_model": "Rosenthal ROM",
+        }
+
+    resolved = [candidate for candidate in candidates if candidate["resolved"]]
+    best = resolved[0] if resolved else min(
+        candidates,
+        key=lambda candidate: candidate["rom_state"]["lof_criterion"],
+    )
+    return {
+        "current_state": state,
+        "recommended_action": best["action"],
+        "reason": (
+            f"{best['action']} 후보를 Rosenthal ROM으로 검증했습니다. "
+            f"{'정상 범위' if best['resolved'] else '위험 완화 여부를 작업자가 확인해야 합니다'}."
+        ),
+        "candidates_evaluated": candidates,
+        "verification_model": "Rosenthal ROM",
     }
 
 

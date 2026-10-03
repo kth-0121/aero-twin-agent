@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import sys
+from threading import Lock
 from typing import Mapping
 
 import numpy as np
@@ -18,11 +19,29 @@ from .sensors import SyntheticSensorProvider
 class V5StreamingLTPredictor:
     """Adapt the trained V5 streaming service to the digital-twin contract."""
 
-    def __init__(self, service, sensor_provider, model_version="LT-V5"):
+    def __init__(self, service, sensor_provider, model_version="LT-V5", replay_rows=()):
         self.service = service
         self.sensor_provider = sensor_provider
         self.model_version = str(model_version)
         self.event_counter = 0
+        self.replay_rows = tuple(
+            {
+                **{key: float(value) for key, value in row.items()},
+                "source_row_index": float(index),
+            }
+            for index, row in enumerate(replay_rows)
+        )
+        self._replay_index = 0
+        self._replay_lock = Lock()
+        self._inference_lock = Lock()
+
+    def next_replay_row(self):
+        if not self.replay_rows:
+            return None
+        with self._replay_lock:
+            row = self.replay_rows[self._replay_index]
+            self._replay_index = (self._replay_index + 1) % len(self.replay_rows)
+            return row
 
     @classmethod
     def from_artifacts(cls, artifact_dir=None, db_path=None):
@@ -99,6 +118,7 @@ class V5StreamingLTPredictor:
             service,
             sensor_provider,
             model_version=str(checkpoint.get("model_version", "LT-V5")),
+            replay_rows=dataset.to_dict(orient="records"),
         )
 
     def predict_result(self, request: LTRequest | Mapping[str, object]) -> LTResponse:
@@ -125,16 +145,17 @@ class V5StreamingLTPredictor:
             if lt_request.delta_t is not None and not np.isfinite(lt_request.delta_t):
                 raise ValueError("LT delta_t must be finite")
 
-            self.event_counter += 1
-            sensor_values = self.sensor_provider.observe(process)
-            service_event = {
-                **lt_request.as_event(),
-                **process,
-                **sensor_values,
-                "event_id": event_id or f"dt:{self.event_counter}",
-                "job_id": lt_request.job_id or "digital-twin",
-            }
-            result = self.service.process_event(service_event)
+            with self._inference_lock:
+                self.event_counter += 1
+                sensor_values = self.sensor_provider.observe(process)
+                service_event = {
+                    **lt_request.as_event(),
+                    **process,
+                    **sensor_values,
+                    "event_id": event_id or f"dt:{self.event_counter}",
+                    "job_id": lt_request.job_id or "digital-twin",
+                }
+                result = self.service.process_event(service_event)
             prediction = result["prediction"]
             width = float(prediction[TARGETS[0]])
             depth = float(prediction[TARGETS[1]])
@@ -151,6 +172,8 @@ class V5StreamingLTPredictor:
                 uncertainty_sigma_approx=result["uncertainty_sigma_approx"],
                 loop_predictions=tuple(result["loop_predictions"]),
                 sensor_source=self.sensor_provider.source,
+                physics_anchor=result["anchor"],
+                history_events=int(result["history_events"]),
                 model_version=self.model_version,
             )
             return LTResponse(

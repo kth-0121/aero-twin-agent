@@ -54,15 +54,101 @@ def area_energy_density(power_w, speed_m_s, spot_diameter_m):
 
 
 AREA_ENERGY_KEYHOLE_THRESHOLD = 4.4e6  # J/m^2, calibrated against data/316L_meltpool.csv
+NORMALIZED_ENTHALPY_THRESHOLD = 14.0  # Demonstration boundary; validate with AM-Bench data
+DATASET_ABSORPTIVITY = 0.34
+
+
+def normalized_enthalpy(power_w, speed_m_s, spot_diameter_m):
+    """Return the 316L dataset's normalized-enthalpy feature in SI units."""
+    speed_m_s = np.maximum(speed_m_s, 1e-9)
+    spot_diameter_m = np.maximum(spot_diameter_m, 1e-9)
+    sensible_enthalpy = 7800.0 * 460.0 * (1678.0 - 293.15)
+    return DATASET_ABSORPTIVITY * power_w / (
+        sensible_enthalpy
+        * np.sqrt(5e-6 * spot_diameter_m**3 * speed_m_s)
+    )
+
+
+def eagar_tsai_keyhole_depth_proxy(power_w, speed_m_s, spot_diameter_m):
+    """Return a dimensionless-keyhole scaling proxy in meters (not a CFD result)."""
+    speed_m_s = np.maximum(speed_m_s, 1e-9)
+    radius_m = np.maximum(spot_diameter_m / 2, 1e-9)
+    sensible_enthalpy = 7800.0 * 460.0 * (1678.0 - 293.15)
+    keyhole_number = (
+        DATASET_ABSORPTIVITY
+        * power_w
+        / (
+            np.pi
+            * sensible_enthalpy
+            * np.sqrt(5e-6 * speed_m_s * radius_m**3)
+        )
+    )
+    return np.maximum(0.4 * (keyhole_number - 1.4), 0.0) * radius_m
 
 
 def classify_regime(power_w, speed_m_s, spot_diameter_m):
-    """'conduction' (Rosenthal ROM is valid) vs 'keyhole_or_transition'
-    (ROM known to underestimate depth -- team measured ~-30% width bias
-    even in conduction rows; it's worse once keyhole effects kick in)."""
-    ed = area_energy_density(power_w, speed_m_s, spot_diameter_m)
-    is_keyhole = ed > AREA_ENERGY_KEYHOLE_THRESHOLD
+    """Classify the conduction/keyhole transition with the demo H* boundary."""
+    h_star = normalized_enthalpy(power_w, speed_m_s, spot_diameter_m)
+    is_keyhole = h_star >= NORMALIZED_ENTHALPY_THRESHOLD
     return np.where(is_keyhole, "keyhole_or_transition", "conduction")
+
+
+def evaluate_physical_state(
+    power_w,
+    speed_mm_s,
+    spot_diameter_mm,
+    hatch_spacing_um,
+    layer_thickness_um,
+    predicted_width_um,
+    predicted_depth_um,
+):
+    """Evaluate an LT-predicted melt pool against thermal and fusion constraints."""
+    speed_m_s = np.maximum(speed_mm_s / 1000.0, 1e-9)
+    spot_m = np.maximum(spot_diameter_mm / 1000.0, 1e-9)
+    width_m = np.maximum(predicted_width_um * 1e-6, 1e-9)
+    depth_m = np.maximum(predicted_depth_um * 1e-6, 1e-9)
+    h_star = normalized_enthalpy(power_w, speed_m_s, spot_m)
+    regime = np.where(
+        h_star >= NORMALIZED_ENTHALPY_THRESHOLD,
+        "keyhole_or_transition",
+        "conduction",
+    )
+    fusion_criterion = lof_risk(
+        hatch_spacing_um * 1e-6,
+        layer_thickness_um * 1e-6,
+        width_m,
+        depth_m,
+    )
+    ros_width_um = melt_pool_width(power_w, speed_m_s) * 1e6
+    et_depth_proxy_um = eagar_tsai_keyhole_depth_proxy(power_w, speed_m_s, spot_m) * 1e6
+    status = (
+        "lof_risk"
+        if fusion_criterion > 1.0
+        else "keyhole_risk"
+        if str(regime) == "keyhole_or_transition"
+        else "normal"
+    )
+    return {
+        "status": status,
+        "regime": str(regime),
+        "normalized_enthalpy": round(float(h_star), 4),
+        "enthalpy_threshold": NORMALIZED_ENTHALPY_THRESHOLD,
+        "lof_criterion": round(float(fusion_criterion), 4),
+        "predicted_width_um": round(float(predicted_width_um), 2),
+        "predicted_depth_um": round(float(predicted_depth_um), 2),
+        "rosenthal_width_um": round(float(ros_width_um), 2),
+        "rosenthal_width_residual_pct": round(
+            float((predicted_width_um - ros_width_um) / max(ros_width_um, 1e-9) * 100),
+            2,
+        ),
+        "eagar_tsai_keyhole_depth_proxy_um": round(float(et_depth_proxy_um), 2),
+        "eagar_tsai_proxy_residual_pct": (
+            round(float((predicted_depth_um - et_depth_proxy_um) / et_depth_proxy_um * 100), 2)
+            if et_depth_proxy_um > 0
+            else None
+        ),
+        "model_boundary": "Rosenthal width + Eagar-Tsai-derived keyhole proxy; proxy is not a calibrated melt-flow solver",
+    }
 
 
 def lof_risk(hatch_m, layer_t_m, width_m, depth_m):

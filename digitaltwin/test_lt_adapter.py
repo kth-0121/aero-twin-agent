@@ -19,6 +19,8 @@ class FakeLTService:
             "drift_warning": False,
             "uncertainty_sigma_approx": {},
             "loop_predictions": [],
+            "anchor": {},
+            "history_events": 0,
         }
 
 
