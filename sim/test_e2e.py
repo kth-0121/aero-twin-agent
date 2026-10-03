@@ -125,10 +125,10 @@ class Api(unittest.TestCase):
         # Ollama 유무와 무관하게 200(응답) 또는 503(명시적 오류)이어야 하며 500이면 안 됨
         self.assertIn(self.client.post("/api/agent", json={"question": "안전해?"}).status_code, (200, 503))
 
-    def test_decision_page_served(self):
-        res = self.client.get("/decision")
-        self.assertEqual(res.status_code, 200)
-        self.assertIn("의사결정 지원", res.text)
+    def test_decision_route_redirects_to_panel(self):
+        res = self.client.get("/decision", follow_redirects=False)
+        self.assertIn(res.status_code, (302, 307))
+        self.assertTrue(res.headers["location"].endswith("#decision-panel"))
 
 
 class DigitalTwinEvents(unittest.TestCase):

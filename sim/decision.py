@@ -20,7 +20,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from sim.lpbf import melt_pool_width, melt_pool_depth, lof_risk, classify_regime
+from sim.lpbf import evaluate_physical_state, melt_pool_width, melt_pool_depth, lof_risk, classify_regime
 
 _LT_DIR = os.path.join(os.path.dirname(__file__), "..", "model", "LoopedTransformer", "legacy")
 _LT_CHECKPOINT = os.path.join(_LT_DIR, "looped_transformer_v3.pt")
@@ -73,9 +73,10 @@ def _v5_predict_width_depth(power_w, speed_mm_s, spot_diameter_um, layer_thickne
     return w_um * 1e-6, d_um * 1e-6
 
 
-def _predict_width_depth(power_w, speed_mm_s, spot_diameter_um, layer_thickness_um):
-    """선택된 LT 우선, 실패 시 v3 -> ROM 폴백. (width_m, depth_m, source) -- 입력이 배열이어도 동작."""
-    if MODEL_BACKEND == "v5":
+def _predict_width_depth(power_w, speed_mm_s, spot_diameter_um, layer_thickness_um, backend=None):
+    """선택된 LT 우선, 실패 시 v3 -> ROM 폴백. (width_m, depth_m, source) -- 입력이 배열이어도 동작.
+    backend: "v3"/"v5" (None이면 MODEL_BACKEND)."""
+    if (backend or MODEL_BACKEND) == "v5":
         try:
             w, d = _v5_predict_width_depth(power_w, speed_mm_s, spot_diameter_um, layer_thickness_um)
             return w, d, "lt_v5"
@@ -132,13 +133,13 @@ def _classify(w, d, power_w, speed_mm_s, spot_diameter_um, hatch_um, layer_thick
 
 
 def find_safe_conditions(power_w, speed_mm_s, spot_diameter_um=100.0, hatch_um=100.0, layer_thickness_um=30.0,
-                         lof_margin=0.95):
+                         lof_margin=0.95, backend=None):
     """학습 데이터 범위 안 (출력, 속도) 격자에서, 현재 조건에서 가장 작게 바꿔서 normal이 되는
     조건을 찾는다. LT를 한 번만 호출. 없으면 None. lof_margin: 경계값 근처 조건은 제외."""
     p_axis = np.arange(SEARCH_POWER_W[0], SEARCH_POWER_W[1] + 1e-9, SEARCH_POWER_W[2])
     v_axis = np.arange(SEARCH_SPEED_MM_S[0], SEARCH_SPEED_MM_S[1] + 1e-9, SEARCH_SPEED_MM_S[2])
     p, v = (a.ravel() for a in np.meshgrid(p_axis, v_axis))
-    w, d, _ = _predict_width_depth(p, v, spot_diameter_um, layer_thickness_um)
+    w, d, _ = _predict_width_depth(p, v, spot_diameter_um, layer_thickness_um, backend)
     status, risk, _ = _classify(w, d, p, v, spot_diameter_um, hatch_um, layer_thickness_um)
     ok = (status == "normal") & (risk <= lof_margin)
     if not ok.any():
@@ -195,6 +196,84 @@ def recommend_action(power_w, speed_mm_s, spot_diameter_um=100.0, hatch_um=100.0
                    f"{'안전 상태로 회복' if best['resolved'] else '위험이 완화되나 완전 해소는 아님'} "
                    f"(새 조건: {best['new_power_w']}W, {best['new_speed_mm_s']}mm/s)"),
         "candidates_evaluated": evaluated,
+    }
+
+
+def recommend_action_from_prediction(
+    power_w,
+    speed_mm_s,
+    spot_diameter_mm,
+    hatch_spacing_um,
+    layer_thickness_um,
+    predicted_width_um,
+    predicted_depth_um,
+):
+    """Use LT geometry for diagnosis and the ROM to validate bounded actions."""
+    state = evaluate_physical_state(
+        power_w,
+        speed_mm_s,
+        spot_diameter_mm,
+        hatch_spacing_um,
+        layer_thickness_um,
+        predicted_width_um,
+        predicted_depth_um,
+    )
+    if state["status"] == "normal":
+        return {
+            "current_state": state,
+            "recommended_action": "공정 유지",
+            "reason": "LT 예측 형상과 물리 제약이 설정된 정상 범위입니다.",
+            "candidates_evaluated": [],
+            "verification_model": "Rosenthal ROM",
+        }
+
+    bounds = {"power_w": (50.0, 500.0), "speed_mm_s": (100.0, 2000.0)}
+    candidates = []
+    for name, adjust in ACTION_CANDIDATES[state["status"]]:
+        candidate_power, candidate_speed = adjust(power_w, speed_mm_s)
+        if not (
+            bounds["power_w"][0] <= candidate_power <= bounds["power_w"][1]
+            and bounds["speed_mm_s"][0] <= candidate_speed <= bounds["speed_mm_s"][1]
+        ):
+            continue
+        rom_state = assess_state(
+            candidate_power,
+            candidate_speed,
+            spot_diameter_um=spot_diameter_mm * 1000.0,
+            hatch_um=hatch_spacing_um,
+            layer_thickness_um=layer_thickness_um,
+        )
+        candidates.append({
+            "action": name,
+            "laser_power_w": round(candidate_power, 1),
+            "scan_speed_mm_s": round(candidate_speed, 1),
+            "rom_state": rom_state,
+            "resolved": rom_state["status"] == "normal",
+        })
+
+    if not candidates:
+        return {
+            "current_state": state,
+            "recommended_action": "운전자 검토 필요",
+            "reason": "안전 범위 안에서 검증 가능한 행동 후보가 없습니다.",
+            "candidates_evaluated": [],
+            "verification_model": "Rosenthal ROM",
+        }
+
+    resolved = [candidate for candidate in candidates if candidate["resolved"]]
+    best = resolved[0] if resolved else min(
+        candidates,
+        key=lambda candidate: candidate["rom_state"]["lof_criterion"],
+    )
+    return {
+        "current_state": state,
+        "recommended_action": best["action"],
+        "reason": (
+            f"{best['action']} 후보를 Rosenthal ROM으로 검증했습니다. "
+            f"{'정상 범위' if best['resolved'] else '위험 완화 여부를 작업자가 확인해야 합니다'}."
+        ),
+        "candidates_evaluated": candidates,
+        "verification_model": "Rosenthal ROM",
     }
 
 

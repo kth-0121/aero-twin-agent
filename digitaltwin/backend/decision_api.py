@@ -5,7 +5,7 @@ DT 콘솔(main.py)에 router 한 줄로 붙는다. 기존 콘솔 코드는 건�
   POST /api/recommend  상태판단 + 행동 후보 생성 + 후보별 재검증
   POST /api/agent      로컬 sLLM Agent 질의 (Ollama 없으면 503)
   GET  /api/scenarios  시연용 프리셋 조건 (정상 / LOF 위험 / keyhole 위험)
-  GET  /decision       위 API를 쓰는 판단 패널 페이지
+  GET  /decision       통합 화면(/)의 의사결정 지원 패널로 이동
 
 검증기는 sim.decision의 ROM 재평가 방식이다 (PyBullet 물리 솔버가 아님) -- 응답의
 `verification` 필드에 그 사실을 명시한다.
@@ -15,7 +15,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -26,10 +26,8 @@ from sim.decision import assess_state, recommend_action  # noqa: E402
 
 router = APIRouter()
 
-_PAGE = Path(__file__).resolve().parents[1] / "frontend" / "decision.html"
-
 SCENARIOS = [
-    {"id": "normal", "label": "정상 조건 (라이브와 동일)", "power_w": 250, "speed_mm_s": 800},
+    {"id": "normal", "label": "정상 조건", "power_w": 250, "speed_mm_s": 800},
     {"id": "lof", "label": "LOF 위험 (저출력·고속)", "power_w": 80, "speed_mm_s": 1500},
     {"id": "keyhole", "label": "Keyhole 위험 (고출력·저속)", "power_w": 450, "speed_mm_s": 300},
 ]
@@ -113,7 +111,8 @@ def agent(q: Question):
 
 @router.get("/decision")
 def decision_page():
-    return FileResponse(_PAGE)
+    """예전 주소 호환: 통합 화면의 의사결정 지원 패널로 이동."""
+    return RedirectResponse("/#decision-panel")
 
 
 def demo():

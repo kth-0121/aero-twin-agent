@@ -3,646 +3,777 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LBFP-01 | AERO Twin</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <title>LPBF Process Supervision</title>
   <style>
     :root {
-      color-scheme: dark;
-      --shell: #11191b;
-      --panel: #192326;
-      --panel-raised: #202d30;
-      --panel-soft: #243235;
-      --line: #344346;
-      --text: #e4edeb;
-      --muted: #91a3a3;
-      --quiet: #647777;
-      --mint: #55d6b1;
-      --cyan: #73c8dc;
-      --amber: #e7b76b;
-      --red: #f0776c;
-      --mono: "IBM Plex Mono", monospace;
-      --sans: "IBM Plex Sans KR", "IBM Plex Sans", sans-serif;
+      color-scheme: light;
+      --page: #f1f2f4;
+      --surface: #fff;
+      --line: #d6d9de;
+      --ink: #202833;
+      --muted: #657181;
+      --blue: #124191;
+      --red: #d7193f;
+      --green: #4d8b3b;
+      --font: Arial, "Noto Sans KR", "Malgun Gothic", sans-serif;
     }
     * { box-sizing: border-box; }
-    html, body { width: 100%; min-width: 360px; min-height: 100%; margin: 0; }
-    body { background: var(--shell); color: var(--text); font-family: var(--sans); font-size: 13px; }
-    button, a { color: inherit; font: inherit; }
-    a { text-decoration: none; }
-    .app-shell { display: grid; grid-template-rows: 62px minmax(0, 1fr); min-height: 100dvh; }
-    .topbar { z-index: 2; display: flex; align-items: center; gap: 32px; padding: 0 22px; border-bottom: 1px solid var(--line); background: #151f21; }
-    .brand { display: flex; flex: 0 0 186px; align-items: center; gap: 11px; }
-    .brand-mark { position: relative; width: 29px; height: 29px; overflow: hidden; border: 1px solid #4b8d7e; background: #1b3935; }
-    .brand-mark::before, .brand-mark::after { position: absolute; width: 23px; height: 5px; content: ""; transform: skewY(-34deg); }
-    .brand-mark::before { top: 8px; left: 3px; background: var(--mint); }
-    .brand-mark::after { top: 17px; left: 3px; width: 15px; background: var(--cyan); }
-    .brand-name { font-size: 13px; font-weight: 700; }
-    .brand-sub { margin-top: 2px; color: var(--muted); font: 9px var(--mono); }
-    .top-context { display: flex; flex: 1; align-items: center; gap: 12px; min-width: 180px; }
-    .plant-tag { color: var(--muted); font: 10px var(--mono); }
-    .context-divider { width: 1px; height: 20px; background: var(--line); }
-    .context-title { font-size: 14px; font-weight: 600; }
-    .top-status { display: flex; align-items: center; gap: 17px; }
-    .status-inline { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; white-space: nowrap; }
-    .live-dot, .signal-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--quiet); }
-    .live-dot.active, .signal-dot.active { background: var(--mint); box-shadow: 0 0 9px #55d6b177; }
-    .mode-tag { padding: 5px 8px; border: 1px solid #68573b; background: #30291e; color: var(--amber); font: 9px var(--mono); letter-spacing: .04em; white-space: nowrap; }
-    #clock { min-width: 67px; color: #c5d2cf; font: 11px var(--mono); text-align: right; }
-    .workspace { display: grid; grid-template-columns: 190px minmax(460px, 1fr) 276px; min-height: 0; }
-    .side-nav { display: flex; flex-direction: column; padding: 22px 12px 14px; border-right: 1px solid var(--line); background: #151f21; }
-    .side-label { margin: 0 9px 10px; color: var(--quiet); font: 9px var(--mono); }
-    .side-nav nav { display: grid; gap: 4px; }
-    .side-link { display: flex; align-items: center; gap: 11px; min-height: 38px; padding: 0 10px; border: 1px solid transparent; color: #aab9b7; font-size: 12px; }
-    .side-link:hover { background: #1d292b; color: var(--text); }
-    .side-link.selected { border-color: #31544c; background: #1c302c; color: #dff8ef; }
-    .nav-glyph { width: 13px; height: 13px; border: 1px solid currentColor; opacity: .72; }
-    .nav-glyph.round { border-radius: 50%; }
-    .nav-glyph.grid { background: linear-gradient(90deg, transparent 43%, currentColor 44%, currentColor 52%, transparent 53%), linear-gradient(transparent 43%, currentColor 44%, currentColor 52%, transparent 53%); }
-    .side-link small { margin-left: auto; color: var(--quiet); font: 9px var(--mono); }
-    .nav-spacer { height: 25px; }
-    .asset-mini { margin: 0 3px; padding: 12px 10px; border: 1px solid var(--line); background: #192426; }
-    .asset-mini-top { display: flex; align-items: center; gap: 8px; font: 11px var(--mono); }
-    .asset-mini-name { margin-top: 8px; font-weight: 600; }
-    .asset-mini-type { margin-top: 3px; color: var(--muted); font-size: 10px; }
-    .nav-footer { margin-top: auto; padding: 12px 8px 2px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; line-height: 1.7; }
-    .nav-footer strong { color: var(--amber); font: 10px var(--mono); }
-    .main-pane { display: grid; grid-template-rows: auto 70px minmax(330px, 1fr) 220px; gap: 14px; min-width: 0; min-height: 0; padding: 18px 18px 16px; overflow: auto; }
-    .page-heading { display: flex; align-items: center; justify-content: space-between; min-height: 46px; }
-    .eyebrow { color: var(--muted); font: 9px var(--mono); }
-    h1 { margin: 3px 0 0; font-size: 18px; font-weight: 600; }
-    .heading-meta { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 10px; }
-    .meta-divider { width: 1px; height: 14px; background: var(--line); }
-    .mono { font-family: var(--mono); }
-    .kpi-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line); background: var(--panel); }
-    .kpi { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 9px 15px; border-right: 1px solid var(--line); }
-    .kpi:last-child { border-right: 0; }
-    .kpi-label { color: var(--muted); font-size: 10px; }
-    .kpi-value { display: flex; align-items: baseline; gap: 6px; margin-top: 5px; white-space: nowrap; }
-    .kpi-value strong { font: 600 19px var(--mono); }
-    .kpi-value span { color: var(--muted); font-size: 10px; }
-    .kpi-progress { height: 2px; margin-top: 7px; background: #344446; }
-    .kpi-progress span { display: block; width: 0; height: 100%; background: var(--mint); transition: width .5s ease; }
-    .monitor-grid { display: grid; grid-template-columns: minmax(0, 1fr) 254px; gap: 14px; min-height: 0; }
-    .panel { min-width: 0; border: 1px solid var(--line); background: var(--panel); }
-    .chamber-panel { display: grid; grid-template-rows: 49px minmax(230px, 1fr) 35px; min-height: 0; overflow: hidden; }
-    .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 13px; border-bottom: 1px solid var(--line); }
-    .panel-title { font-size: 11px; font-weight: 600; }
-    .panel-subtitle { margin-top: 2px; color: var(--muted); font-size: 9px; }
-    .heading-tools { display: flex; align-items: center; gap: 10px; }
-    .cam-label { color: var(--muted); font: 9px var(--mono); }
-    .reset-view { padding: 5px 8px; border: 1px solid var(--line); background: transparent; color: #c1cfcc; cursor: pointer; font-size: 9px; }
-    .reset-view:hover { border-color: #63877f; background: #22312f; }
-    .scene-wrap { position: relative; min-height: 0; overflow: hidden; background: #182225; }
-    #scene { display: block; width: 100%; height: 100%; }
-    .scene-caption { position: absolute; top: 12px; left: 13px; padding: 7px 9px; border-left: 2px solid var(--mint); background: #10191bcc; }
-    .scene-caption strong { display: block; font: 10px var(--mono); }
-    .scene-caption span { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
-    .scene-source { position: absolute; top: 12px; right: 12px; padding: 5px 7px; border: 1px solid #66573c; background: #201f1bcc; color: var(--amber); font: 9px var(--mono); }
-    .scene-axis { position: absolute; right: 14px; bottom: 13px; color: #adbfbd; font: 9px var(--mono); line-height: 1.8; text-align: right; text-shadow: 0 1px 4px #000; }
-    .scene-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 13px; border-top: 1px solid var(--line); color: var(--muted); font-size: 9px; }
-    .scene-legend { display: flex; align-items: center; gap: 13px; }
-    .legend-item { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
-    .legend-swatch { width: 7px; height: 7px; background: var(--mint); }
-    .legend-swatch.laser { border-radius: 50%; background: var(--red); box-shadow: 0 0 6px var(--red); }
-    .legend-swatch.glass { background: var(--cyan); }
-    .trend-panel, .event-panel { display: grid; grid-template-rows: 42px minmax(0, 1fr); min-height: 0; }
-    .trend-head, .event-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 12px; border-bottom: 1px solid var(--line); }
-    .trend-legend { display: flex; gap: 10px; color: var(--muted); font-size: 8px; }
-    .trend-legend span { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-    .trend-legend i { width: 6px; height: 6px; background: var(--cyan); }
-    .trend-legend .oxygen { background: var(--mint); }
-    .trend-legend .temperature { background: var(--amber); }
-    #trend { display: block; width: 100%; height: 100%; }
-    .event-list { display: flex; flex-direction: column; gap: 0; min-height: 0; padding: 1px 12px; overflow: auto; }
-    .event-row { display: grid; grid-template-columns: 50px 6px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 37px; border-bottom: 1px solid #293638; }
-    .event-row:last-child { border-bottom: 0; }
-    .event-time { color: var(--quiet); font: 9px var(--mono); }
-    .event-mark { width: 5px; height: 5px; border-radius: 50%; background: var(--mint); }
-    .event-mark.warn { background: var(--amber); }
-    .event-copy { overflow: hidden; }
-    .event-title { overflow: hidden; color: #d3dfdc; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-    .event-detail { overflow: hidden; margin-top: 2px; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
-    .asset-panel { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
-    .asset-head { padding: 14px 13px 13px; border-bottom: 1px solid var(--line); }
-    .asset-id-row { display: flex; align-items: center; justify-content: space-between; }
-    .asset-id { font: 600 15px var(--mono); }
-    .asset-health { display: flex; align-items: center; gap: 5px; color: var(--mint); font-size: 9px; }
-    .asset-desc { margin-top: 5px; color: var(--muted); font-size: 10px; }
-    .section-heading { display: flex; align-items: center; justify-content: space-between; padding: 12px 13px 7px; color: var(--muted); font-size: 9px; }
-    .section-heading small { color: var(--quiet); font: 9px var(--mono); }
-    .subsystem-list { padding: 0 13px; }
-    .subsystem { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 35px; border-bottom: 1px solid #293638; }
-    .subsystem:last-child { border-bottom: 0; }
-    .subsystem-name { color: #c6d3d0; font-size: 10px; }
-    .subsystem-value { color: var(--muted); font: 9px var(--mono); text-align: right; }
-    .subsystem-state { color: var(--mint); font: 8px var(--mono); text-align: right; }
-    .subsystem-state.standby { color: var(--amber); }
-    .build-block { margin: 10px 12px 0; padding: 11px; border: 1px solid var(--line); background: #1b2729; }
-    .build-top { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 9px; }
-    .build-code { margin-top: 5px; color: var(--text); font: 10px var(--mono); }
-    .build-progress { height: 4px; margin: 11px 0 7px; background: #364648; }
-    .build-progress span { display: block; width: 0; height: 100%; background: var(--mint); transition: width .5s ease; }
-    .build-progress-meta { display: flex; justify-content: space-between; color: var(--muted); font: 9px var(--mono); }
-    .process-list { padding: 0 13px 12px; }
-    .process-row { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; border-bottom: 1px solid #293638; color: var(--muted); font-size: 9px; }
-    .process-row:last-child { border-bottom: 0; }
-    .process-row strong { color: #dbe6e2; font: 10px var(--mono); white-space: nowrap; }
-    .alarm-strip { display: flex; align-items: center; gap: 8px; margin: auto 12px 12px; padding: 9px 10px; border: 1px solid #345248; background: #1b2c28; color: #b9d8ce; font-size: 9px; }
-    .alarm-count { color: var(--mint); font: 600 11px var(--mono); }
-    @keyframes arrive { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-    .main-pane, .side-nav, .asset-panel { animation: arrive .35s ease-out both; }
-    @media (max-width: 1280px) {
-      .workspace { grid-template-columns: 170px minmax(400px, 1fr) 250px; }
-      .main-pane { grid-template-rows: auto 68px minmax(310px, 1fr) 210px; padding-inline: 13px; }
-      .monitor-grid { grid-template-columns: minmax(0, 1fr) 230px; gap: 10px; }
-      .topbar { gap: 18px; padding-inline: 16px; }
-      .brand { flex-basis: 165px; }
+    body { margin: 0; background: var(--page); color: var(--ink); font: 13px var(--font); }
+    button, input, select { font: inherit; }
+    button { min-height: 31px; padding: 0 12px; border: 1px solid #b9c1ca; border-radius: 2px; background: #fff; color: var(--ink); cursor: pointer; font-size: 12px; font-weight: 600; }
+    button:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+    button:disabled { cursor: not-allowed; opacity: .48; }
+    button.primary { border-color: var(--blue); background: var(--blue); color: #fff; }
+    button.primary:hover:not(:disabled) { background: #0b3478; color: #fff; }
+    button.danger { border-color: var(--red); background: var(--red); color: #fff; }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+    .topbar { display: flex; height: 54px; align-items: center; gap: 25px; padding: 0 20px; background: var(--blue); color: #fff; }
+    .wordmark { padding-right: 20px; border-right: 1px solid #ffffff55; font-size: 20px; font-weight: 700; letter-spacing: -.06em; }
+    .product-name { font-size: 12px; font-weight: 600; }
+    .topbar-spacer { flex: 1; }
+    .top-meta { display: flex; align-items: center; gap: 16px; color: #e1e8f2; font-size: 11px; }
+    .top-state { display: inline-flex; align-items: center; gap: 7px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #bfc6d0; }
+    .dot.ready { background: #9ccc83; }
+    .dot.error { background: var(--red); }
+    .page { width: min(1600px, 100%); margin: 0 auto; padding: 16px 18px 24px; }
+    .toolbar { display: flex; min-height: 43px; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .crumb { color: var(--muted); font-size: 11px; }
+    .crumb strong { color: var(--ink); font-size: 15px; }
+    .toolbar-actions { display: flex; align-items: center; gap: 8px; }
+    .simulation-note { color: var(--muted); font-size: 10px; }
+    .workflow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .workflow-step { min-height: 77px; padding: 11px 12px 10px; border: 1px solid var(--line); border-top: 3px solid #aab2bc; background: var(--surface); }
+    .workflow-step.current { border-top-color: var(--blue); }
+    .workflow-step.complete { border-top-color: var(--green); }
+    .workflow-step.alert { border-top-color: var(--red); }
+    .step-heading { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; }
+    .step-index { display: inline-grid; width: 18px; height: 18px; place-items: center; border: 1px solid #c6cbd2; color: var(--muted); font-size: 10px; }
+    .workflow-step.current .step-index { border-color: var(--blue); background: var(--blue); color: white; }
+    .workflow-step.complete .step-index { border-color: var(--green); color: var(--green); }
+    .step-status { margin: 7px 0 0 26px; color: var(--muted); font-size: 10px; }
+    .card { border: 1px solid var(--line); background: var(--surface); }
+    .card-head { display: flex; min-height: 39px; align-items: center; justify-content: space-between; gap: 10px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+    .card-title { font-size: 12px; font-weight: 700; }
+    .card-subtitle, .muted { color: var(--muted); font-size: 10px; }
+    .upload-row { display: grid; grid-template-columns: minmax(180px, 1fr) 72px auto auto; align-items: center; gap: 8px; padding: 11px 12px; }
+    input[type="file"] { width: 100%; min-width: 0; color: var(--muted); font-size: 11px; }
+    select { height: 31px; padding: 0 7px; border: 1px solid #b9c1ca; border-radius: 2px; background: white; color: var(--ink); }
+    .upload-progress { display: grid; grid-template-columns: minmax(0, 1fr) 42px; align-items: center; gap: 9px; padding: 0 12px 9px; }
+    .upload-progress .progress-track { height: 5px; border: 1px solid #d6d9de; }
+    .upload-progress .progress-track span { transition: width .12s linear; }
+    .upload-progress-label { color: var(--muted); font-size: 10px; text-align: right; }
+    .job-meta { display: flex; justify-content: space-between; gap: 12px; padding: 0 12px 10px; color: var(--muted); font-size: 10px; }
+    .progress-track { height: 3px; background: #e3e6ea; }
+    .progress-track span { display: block; width: 0; height: 100%; background: var(--blue); transition: width .15s linear; }
+    .progress-track.thermal span { background: var(--red); }
+    .progress-track.agent span { background: var(--green); }
+    .actions-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+    .stage-control { display: flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; }
+    .stage-control strong { display: block; margin-bottom: 4px; font-size: 11px; }
+    .stage-control span { color: var(--muted); font-size: 10px; }
+    .main-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(300px, .9fr); gap: 12px; }
+    .scene-card { min-width: 0; }
+    .scene-wrap { position: relative; height: 365px; overflow: hidden; background: #e8ebef; }
+    #machine-view { display: block; width: 100%; height: 100%; }
+    .scene-overlay { position: absolute; top: 10px; left: 11px; padding: 6px 8px; border: 1px solid var(--line); background: #ffffffed; color: var(--muted); font-size: 10px; }
+    .scene-footer { display: flex; min-height: 32px; align-items: center; justify-content: space-between; gap: 8px; padding: 0 11px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; }
+    .side-stack { display: grid; gap: 10px; align-content: start; }
+    .metric-grid { display: grid; grid-template-columns: 1fr 1fr; }
+    .metric { min-height: 70px; padding: 10px 11px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .metric:nth-child(2n) { border-right: 0; }
+    .metric:nth-last-child(-n+2) { border-bottom: 0; }
+    .metric-label { color: var(--muted); font-size: 10px; }
+    .metric-value { display: block; margin-top: 7px; font-size: 17px; font-weight: 700; }
+    .metric-value small { margin-left: 3px; color: var(--muted); font-size: 10px; font-weight: 400; }
+    .result-list { display: grid; }
+    .result-row { display: flex; min-height: 34px; align-items: center; justify-content: space-between; gap: 10px; padding: 0 11px; border-bottom: 1px solid #e7e9ec; font-size: 11px; }
+    .result-row:last-child { border-bottom: 0; }
+    .result-row span:first-child { color: var(--muted); }
+    .result-row strong { text-align: right; font-size: 11px; }
+    .status-pill { display: inline-block; padding: 3px 7px; border: 1px solid #c7ccd3; color: var(--muted); font-size: 10px; }
+    .status-pill.normal { border-color: #a8c99b; color: var(--green); }
+    .status-pill.risk { border-color: #e6a1af; color: var(--red); }
+    .recommendation { border-top: 3px solid var(--blue); }
+    .recommendation-body { padding: 11px 12px; }
+    .recommendation-action { margin: 3px 0 8px; font-size: 17px; font-weight: 700; }
+    .recommendation-detail { color: var(--muted); font-size: 10px; line-height: 1.5; }
+    .recommendation-values { display: flex; gap: 18px; margin: 11px 0; }
+    .recommendation-values div { display: grid; gap: 4px; }
+    .recommendation-values span { color: var(--muted); font-size: 9px; }
+    .recommendation-values strong { font-size: 13px; }
+    .review-actions { display: flex; gap: 7px; margin-top: 10px; }
+    .events { max-height: 180px; overflow: auto; }
+    .event { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 9px; padding: 8px 11px; border-bottom: 1px solid #e7e9ec; }
+    .event:last-child { border-bottom: 0; }
+    .event time { color: var(--muted); font-size: 9px; }
+    .event strong { display: block; font-size: 10px; }
+    .event span { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
+    .footer-note { margin-top: 12px; padding: 8px 10px; border-left: 3px solid var(--red); background: #fff; color: var(--muted); font-size: 10px; line-height: 1.45; }
+    @media (max-width: 900px) {
+      .main-grid { grid-template-columns: 1fr; }
+      .side-stack { grid-template-columns: 1fr 1fr; }
+      .recommendation { grid-column: 1 / -1; }
     }
-    @media (max-width: 1000px) {
-      .workspace { grid-template-columns: 1fr; }
-      .side-nav { display: none; }
-      .main-pane { grid-template-rows: auto 70px minmax(350px, 470px) 220px; }
-      .asset-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; overflow: visible; }
-      .asset-head, .alarm-strip { grid-column: 1 / -1; }
-      .build-block { align-self: start; }
-      .process-section { grid-column: 1; }
-      .alarm-strip { margin-top: 10px; }
-    }
-    @media (max-width: 700px) {
-      html, body { min-width: 360px; }
-      .app-shell { display: block; min-height: 100dvh; }
-      .topbar { min-height: 58px; padding-inline: 12px; gap: 10px; }
-      .brand { flex-basis: auto; }
-      .brand-sub, .top-context, #clock { display: none; }
-      .top-status { gap: 9px; margin-left: auto; }
-      .status-inline { font-size: 9px; }
-      .workspace { display: block; }
-      .main-pane { display: flex; flex-direction: column; gap: 10px; padding: 13px 10px 18px; overflow: visible; }
-      .page-heading { min-height: 42px; }
-      h1 { font-size: 16px; }
-      .heading-meta { gap: 5px; font-size: 8px; }
-      .kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .kpi { min-height: 67px; padding: 9px 10px; }
-      .kpi:nth-child(2) { border-right: 0; }
-      .kpi:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
-      .kpi-value strong { font-size: 16px; }
-      .monitor-grid { display: flex; flex-direction: column; }
-      .chamber-panel { height: 410px; grid-template-rows: 47px minmax(0, 1fr) 34px; }
-      .scene-footer { padding-inline: 8px; }
-      .scene-legend { gap: 7px; }
-      .scene-footer > span { font-size: 8px; }
-      .trend-panel, .event-panel { min-height: 190px; }
-      .trend-legend { gap: 6px; }
-      .asset-panel { margin-top: 0; }
-      .asset-head { min-height: 72px; }
-      .build-block { margin: 8px; }
-      .section-heading { padding-inline: 9px; }
-      .subsystem-list, .process-list { padding-inline: 9px; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    @media (max-width: 620px) {
+      .topbar { height: 48px; gap: 12px; padding-inline: 11px; }
+      .wordmark { padding-right: 12px; font-size: 18px; }
+      .product-name { font-size: 10px; }
+      .top-meta { gap: 8px; font-size: 9px; }
+      .top-meta .hide-mobile { display: none; }
+      .page { padding: 11px 9px 18px; }
+      .toolbar { align-items: flex-start; flex-direction: column; }
+      .workflow { grid-template-columns: 1fr 1fr; gap: 7px; }
+      .workflow-step { min-height: 69px; padding: 8px; }
+      .step-status { margin-left: 26px; }
+      .upload-row { grid-template-columns: minmax(0, 1fr) 62px; }
+      .upload-row button { width: 100%; }
+      .actions-row { grid-template-columns: 1fr; }
+      .scene-wrap { height: 280px; }
+      .side-stack { grid-template-columns: 1fr; }
+      .recommendation { grid-column: auto; }
+      .job-meta { flex-direction: column; gap: 4px; }
     }
   </style>
+  <link rel="stylesheet" href="/static/decision_panel.css" />
 </head>
 <body>
-<div class="app-shell">
   <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true"></span>
-      <div><div class="brand-name">AERO TWIN</div><div class="brand-sub">MANUFACTURING SYSTEMS</div></div>
-    </div>
-    <div class="top-context">
-      <span class="plant-tag">PLANT 04</span><span class="context-divider"></span>
-      <span class="context-title">적층 제조 운영</span>
-    </div>
-    <div class="top-status">
-      <span class="status-inline"><i id="connection-dot" class="live-dot"></i><span id="connection-label">연결 중</span></span>
-      <span class="mode-tag">SIMULATION</span>
-      <time id="clock">--:--:--</time>
+    <div class="wordmark">AERO</div>
+    <div class="product-name">LPBF PROCESS SUPERVISION</div>
+    <div class="topbar-spacer"></div>
+    <div class="top-meta">
+      <span class="top-state"><i id="connection-dot" class="dot"></i><span id="top-phase">STL 입력 대기</span></span>
+      <span class="hide-mobile">316L · 시뮬레이션</span>
+      <span id="clock">--:--:--</span>
     </div>
   </header>
 
-  <div class="workspace">
-    <aside class="side-nav">
-      <p class="side-label">OPERATIONS</p>
-      <nav aria-label="모니터링 메뉴">
-        <a class="side-link selected" href="#monitor"><span class="nav-glyph grid"></span>설비 개요<small>01</small></a>
-        <a class="side-link" href="#chamber"><span class="nav-glyph"></span>빌드 챔버</a>
-        <a class="side-link" href="#trends"><span class="nav-glyph round"></span>공정 트렌드</a>
-        <a class="side-link" href="#events"><span class="nav-glyph"></span>이벤트 로그</a>
-      </nav>
-      <div class="nav-spacer"></div>
-      <p class="side-label">ASSET</p>
-      <div class="asset-mini">
-        <div class="asset-mini-top"><i id="asset-dot" class="signal-dot"></i><span id="sidebar-equipment">LBFP-01</span></div>
-        <div class="asset-mini-name">파우더 베드 용융</div>
-        <div class="asset-mini-type">LASER CELL · 316L</div>
+  <main class="page">
+    <div class="toolbar">
+      <div class="crumb">제조 운영 / <strong>작업 감독</strong></div>
+      <div class="toolbar-actions">
+        <span class="simulation-note">데모 프로파일 · 실장비와 분리됨</span>
       </div>
-      <div class="nav-footer">데이터 소스<br /><strong>시뮬레이션 피드</strong><br />PLC 연결 대기</div>
-    </aside>
+    </div>
 
-    <main id="monitor" class="main-pane">
-      <section class="page-heading">
-        <div><div class="eyebrow">MANUFACTURING / EQUIPMENT</div><h1>설비 모니터링</h1></div>
-        <div class="heading-meta"><span id="equipment-heading" class="mono">LBFP-01</span><span class="meta-divider"></span><span>316L · 단일 레이저</span></div>
-      </section>
-
-      <section class="kpi-strip" aria-label="주요 공정 지표">
-        <div class="kpi"><span class="kpi-label">빌드 진행률</span><div class="kpi-value"><strong id="progress-value">--.-</strong><span>%</span></div><div class="kpi-progress"><span id="progress-bar"></span></div></div>
-        <div class="kpi"><span class="kpi-label">현재 레이어</span><div class="kpi-value"><strong id="layer-value">--- / ---</strong></div></div>
-        <div class="kpi"><span class="kpi-label">레이저 출력</span><div class="kpi-value"><strong id="power-value">---</strong><span>W</span></div></div>
-        <div class="kpi"><span class="kpi-label">스캔 속도</span><div class="kpi-value"><strong id="speed-value">---</strong><span>mm/s</span></div></div>
-      </section>
-
-      <div class="monitor-grid">
-        <section id="chamber" class="panel chamber-panel">
-          <div class="panel-heading">
-            <div><div class="panel-title">빌드 챔버 · 실시간 위치</div><div class="panel-subtitle">레이저 스캔 헤드 / 빌드 플레이트</div></div>
-            <div class="heading-tools"><span class="cam-label">3D VIEW</span><button id="reset-view" class="reset-view" type="button" title="3D 시점을 초기화">시점 초기화</button></div>
-          </div>
-          <div class="scene-wrap">
-            <canvas id="scene" aria-label="LBFP 장비 빌드 챔버 3D 모델"></canvas>
-            <div class="scene-caption"><strong id="scene-layer">LAYER ---</strong><span id="scene-track">TRACK --- / ---</span></div>
-            <span class="scene-source">SIMULATED POSITION</span>
-            <div class="scene-axis"><span id="position-value">X --.-- · Y --.-- · Z --.-- mm</span><br />BUILD ENVELOPE 100 × 100 mm</div>
-          </div>
-          <div class="scene-footer"><div class="scene-legend"><span class="legend-item"><i class="legend-swatch laser"></i>레이저 스폿</span><span class="legend-item"><i class="legend-swatch"></i>스캔 헤드</span><span class="legend-item"><i class="legend-swatch glass"></i>챔버 도어</span></div><span>마우스로 회전 · 휠로 확대</span></div>
-        </section>
-
-        <section id="trends" class="panel trend-panel">
-          <div class="trend-head"><div class="panel-title">공정 트렌드</div><div class="trend-legend"><span><i></i>출력</span><span><i class="oxygen"></i>산소</span><span><i class="temperature"></i>온도</span></div></div>
-          <canvas id="trend" aria-label="레이저 출력, 챔버 산소 농도와 온도 트렌드"></canvas>
-        </section>
-
-        <section id="events" class="panel event-panel">
-          <div class="event-head"><div class="panel-title">최근 이벤트</div><span class="cam-label">LIVE LOG</span></div>
-          <div id="event-list" class="event-list" aria-live="polite"></div>
-        </section>
+    <section class="workflow" aria-label="작업 단계">
+      <div id="step-card-upload" class="workflow-step current">
+        <div class="step-heading"><span class="step-index">1</span> STL 등록 · 슬라이싱</div>
+        <div id="step-status-upload" class="step-status">작업 파일을 등록하세요</div>
       </div>
-    </main>
-
-    <aside class="panel asset-panel" aria-label="설비 세부 상태">
-      <div class="asset-head">
-        <div class="asset-id-row"><strong id="equipment">LBFP-01</strong><span class="asset-health"><i class="signal-dot"></i><span id="state">대기</span></span></div>
-        <div class="asset-desc">LPBF 시스템 · 장비 상태 정상</div>
+      <div id="step-card-thermal" class="workflow-step">
+        <div class="step-heading"><span class="step-index">2</span> 열해석</div>
+        <div id="step-status-thermal" class="step-status">STL 등록 후 시작 가능</div>
       </div>
-      <div class="section-heading">서브시스템 <small>4 / 4 정상</small></div>
-      <div class="subsystem-list">
-        <div class="subsystem"><i class="signal-dot active"></i><span class="subsystem-name">레이저 소스</span><span id="laser-state" class="subsystem-state">SCANNING</span></div>
-        <div class="subsystem"><i class="signal-dot active"></i><span class="subsystem-name">챔버 인터록</span><span id="interlock-state" class="subsystem-state">CLOSED</span></div>
-        <div class="subsystem"><i class="signal-dot active"></i><span class="subsystem-name">분말 리코터</span><span id="recoater-state" class="subsystem-state standby">STANDBY</span></div>
-        <div class="subsystem"><i class="signal-dot active"></i><span class="subsystem-name">필터 유닛</span><span class="subsystem-value">정상</span></div>
+      <div id="step-card-agent" class="workflow-step">
+        <div class="step-heading"><span class="step-index">3</span> AI 분석 · 예측</div>
+        <div id="step-status-agent" class="step-status">열해석 완료 후 시작 가능</div>
       </div>
-
-      <div class="build-block">
-        <div class="build-top"><span>현재 빌드</span><span id="material-value">316L</span></div>
-        <div id="job-value" class="build-code">LPBF-316L-042</div>
-        <div class="build-progress"><span id="build-progress-bar"></span></div>
-        <div class="build-progress-meta"><span id="build-progress-value">--.-%</span><span id="elapsed-value">경과 --:--</span></div>
+      <div id="step-card-review" class="workflow-step">
+        <div class="step-heading"><span class="step-index">4</span> 승인 · 가상 적용</div>
+        <div id="step-status-review" class="step-status">분석 결과 검토 대기</div>
       </div>
+    </section>
 
-      <div class="process-section">
-        <div class="section-heading">챔버 및 공정</div>
-        <div class="process-list">
-          <div class="process-row"><span>챔버 온도</span><strong id="temperature-value">--.- °C</strong></div>
-          <div class="process-row"><span>산소 농도</span><strong id="oxygen-value">--- ppm</strong></div>
-          <div class="process-row"><span>필터 부하</span><strong id="filter-value">--- %</strong></div>
-          <div class="process-row"><span>용융풀 폭</span><strong id="width-value">--- μm</strong></div>
-          <div class="process-row"><span>종횡비 / 면적</span><strong id="geometry-value">--- / ---</strong></div>
-          <div class="process-row"><span>스캔 좌표</span><strong id="position-detail">--- / --- mm</strong></div>
+    <section class="card">
+      <div class="card-head">
+        <span class="card-title">작업 입력</span>
+        <span id="job-status" class="card-subtitle">STL을 등록하면 슬라이싱 결과만 준비됩니다. 분석은 별도 시작합니다.</span>
+      </div>
+      <div class="upload-row">
+        <input id="stl-file" type="file" accept=".stl,model/stl" aria-label="출력물 STL 파일" />
+        <select id="source-units" aria-label="STL 단위">
+          <option value="mm">mm</option><option value="cm">cm</option><option value="m">m</option><option value="in">in</option>
+        </select>
+        <button id="upload-button" class="primary" type="button">STL 등록 · 슬라이싱</button>
+        <button id="reset-button" type="button" disabled>새 작업</button>
+      </div>
+      <div class="upload-progress">
+        <div class="progress-track" role="progressbar" aria-label="STL 업로드 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="upload-progress"></span></div>
+        <span id="upload-progress-label" class="upload-progress-label">대기</span>
+      </div>
+      <div class="job-meta">
+        <span id="model-meta">선택된 파일 없음</span>
+        <span id="profile-meta">316L · 예시 공정 프로파일</span>
+      </div>
+    </section>
+
+    <section class="actions-row" aria-label="분석 시작 제어">
+      <div class="card">
+        <div class="progress-track thermal"><span id="thermal-progress"></span></div>
+        <div class="stage-control">
+          <div><strong>FiPy 열해석</strong><span id="thermal-summary">슬라이싱된 벡터 경로로 정성적 열장을 계산</span></div>
+          <button id="thermal-button" type="button" disabled>열해석 시작</button>
         </div>
       </div>
-      <div class="alarm-strip"><span class="alarm-count">0</span><span>활성 알람 · 인터록 정상</span></div>
-    </aside>
-  </div>
-</div>
+      <div class="card">
+        <div class="progress-track agent"><span id="agent-progress"></span></div>
+        <div class="stage-control">
+          <div><strong>Physical AI Agent</strong><span id="agent-summary">열해석 완료 전에는 실행되지 않습니다</span></div>
+          <button id="agent-button" class="primary" type="button" disabled>Agent 가동</button>
+        </div>
+      </div>
+    </section>
 
-<script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"
+    <section class="main-grid">
+      <section class="card scene-card">
+        <div class="card-head">
+          <span class="card-title">빌드 챔버 · 툴패스</span>
+          <span id="scene-status" class="card-subtitle">작업 없음</span>
+        </div>
+        <div class="scene-wrap">
+          <canvas id="machine-view" aria-label="LPBF 빌드 챔버와 STL 모델 미리보기"></canvas>
+          <span id="scene-overlay" class="scene-overlay">STL 대기 · 경로 미재생</span>
+        </div>
+        <div class="scene-footer"><span id="position-value">X — · Y — · Z — mm</span><span>드래그 회전 · 휠 확대</span></div>
+      </section>
+
+      <aside class="side-stack">
+        <section class="card">
+          <div class="card-head"><span class="card-title">작업 현황</span><span id="phase-label" class="status-pill">대기</span></div>
+          <div class="metric-grid">
+            <div class="metric"><span class="metric-label">레이어</span><strong id="layer-value" class="metric-value">—<small> / —</small></strong></div>
+            <div class="metric"><span class="metric-label">툴패스 벡터</span><strong id="vector-value" class="metric-value">—</strong></div>
+            <div class="metric"><span class="metric-label">열장 hot 영역</span><strong id="hot-value" class="metric-value">—<small>%</small></strong></div>
+            <div class="metric"><span class="metric-label">융점 기준 영역</span><strong id="melt-value" class="metric-value">—<small>%</small></strong></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><span class="card-title">물리 상태 · LT 추론</span><span id="physical-status" class="status-pill">대기</span></div>
+          <div class="result-list">
+            <div class="result-row"><span>LT 예측 폭 / 깊이</span><strong id="lt-geometry">—</strong></div>
+            <div class="result-row"><span>정규화 엔탈피 H*</span><strong id="enthalpy-value">—</strong></div>
+            <div class="result-row"><span>LOF 기준</span><strong id="lof-value">—</strong></div>
+            <div class="result-row"><span>공정 방향</span><strong id="direction-value">예측 대기</strong></div>
+          </div>
+        </section>
+
+        <section class="card recommendation">
+          <div class="card-head"><span class="card-title">장기 공정 변수 권고</span><span class="card-subtitle">벡터 전체 집계</span></div>
+          <div class="recommendation-body">
+            <div id="recommendation-action" class="recommendation-action">분석 결과 없음</div>
+            <div id="recommendation-detail" class="recommendation-detail">AI 분석이 끝나면 행동 후보와 근거를 표시합니다.</div>
+            <div class="recommendation-values">
+              <div><span>레이저 출력</span><strong id="recommended-power">— W</strong></div>
+              <div><span>스캔 속도</span><strong id="recommended-speed">— mm/s</strong></div>
+            </div>
+            <div class="review-actions">
+              <button id="approve-button" class="primary" type="button" disabled>승인 · 다음 가상 작업에 적용</button>
+              <button id="reject-button" type="button" disabled>거부</button>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </section>
+
+    <div id="decision-panel"></div>
+
+    <section class="card" style="margin-top:12px">
+      <div class="card-head"><span class="card-title">운영 이벤트</span><span class="card-subtitle">현재 작업 기록</span></div>
+      <div id="event-list" class="events" aria-live="polite">
+        <div class="event"><time>--:--:--</time><div><strong>시스템 준비 완료</strong><span>작업 입력을 기다리는 중 · 자동 재생 없음</span></div></div>
+      </div>
+    </section>
+
+    <div class="footer-note">실장비 센서·제어기 미연결. 열해석은 FiPy 기반 정성적 2D 모델이며, 센서값·품질보증·실제 장비 동작을 의미하지 않습니다. 권고 승인 시 값은 다음 가상 작업에만 적용됩니다.</div>
+  </main>
+  <script src="/static/decision_panel.js"></script>
+
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js" } }
+  </script>
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/controls/OrbitControls.js';
+    import { STLLoader } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/STLLoader.js';
+
+    const byId = id => document.getElementById(id);
+    const canvas = byId('machine-view');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setClearColor(0xe8ebef, 1);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xe8ebef);
+    const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+    camera.position.set(4.3, 3.6, 5.2);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 1.05, 0);
+    controls.enableDamping = true;
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x78818a, 2.1));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+    keyLight.position.set(4, 7, 5);
+    scene.add(keyLight);
+
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(10, 10),
+      new THREE.MeshStandardMaterial({ color: 0xf1f2f4, roughness: 0.9 }),
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.04;
+    scene.add(ground);
+    const grid = new THREE.GridHelper(5, 30, 0xb5bdc7, 0xd3d8de);
+    grid.position.y = -0.02;
+    scene.add(grid);
+
+    const machine = new THREE.Group();
+    scene.add(machine);
+    const metal = new THREE.MeshStandardMaterial({ color: 0xaeb7c1, metalness: 0.56, roughness: 0.4 });
+    const cabinet = new THREE.MeshStandardMaterial({ color: 0xd5d9de, metalness: 0.25, roughness: 0.55 });
+    const darkMetal = new THREE.MeshStandardMaterial({ color: 0x626d79, metalness: 0.5, roughness: 0.43 });
+    const blue = new THREE.MeshStandardMaterial({ color: 0x124191, metalness: 0.25, roughness: 0.4 });
+    const glass = new THREE.MeshStandardMaterial({ color: 0xc4d0dd, transparent: true, opacity: 0.16, roughness: 0.25, depthWrite: false });
+    function block(parent, size, position, material) {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), material);
+      mesh.position.set(...position);
+      parent.add(mesh);
+      return mesh;
     }
-  }
-</script>
-<script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/controls/OrbitControls.js';
+    block(machine, [2.8, .2, 2.45], [0, .12, 0], darkMetal);
+    block(machine, [2.65, .65, 2.3], [0, .52, 0], cabinet);
+    block(machine, [2.2, .12, .08], [0, .9, 0], metal);
+    block(machine, [1.95, .12, 1.95], [0, 1.02, 0], darkMetal);
+    block(machine, [1.78, .07, 1.78], [0, 1.12, 0], metal);
+    for (const x of [-1.08, 1.08]) {
+      for (const z of [-.95, .95]) {
+        block(machine, [.08, 1.32, .08], [x, 1.72, z], metal);
+        block(machine, [.13, .06, .13], [x, 2.39, z], darkMetal);
+      }
+    }
+    block(machine, [2.2, .08, .08], [0, 2.28, -.95], darkMetal);
+    block(machine, [2.2, .08, .08], [0, 2.28, .95], darkMetal);
+    block(machine, [2.18, 1.1, .025], [0, 1.58, .96], glass);
+    block(machine, [.025, 1.1, 1.9], [-1.1, 1.58, 0], glass);
+    block(machine, [.025, 1.1, 1.9], [1.1, 1.58, 0], glass);
+    const gantry = new THREE.Group();
+    machine.add(gantry);
+    block(gantry, [2.0, .1, .13], [0, 2.08, 0], darkMetal);
+    const carriage = new THREE.Group();
+    gantry.add(carriage);
+    block(carriage, [.32, .15, .25], [0, 2.0, 0], metal);
+    block(carriage, [.18, .1, .18], [0, 1.87, 0], blue);
+    const laser = new THREE.Mesh(new THREE.CylinderGeometry(.012, .03, .65, 12), new THREE.MeshBasicMaterial({ color: 0xd7193f, transparent: true, opacity: .42 }));
+    laser.position.set(0, 1.52, 0);
+    machine.add(laser);
+    const plate = block(machine, [1.62, .012, 1.62], [0, 1.17, 0], new THREE.MeshStandardMaterial({ color: 0xb2a98f, roughness: .92 }));
+    const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1.18);
+    renderer.localClippingEnabled = true;
 
-const canvas = document.querySelector('#scene');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setClearColor(0x182225, 1);
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.12;
+    const scanPath = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x124191 }));
+    machine.add(scanPath);
+    let pathPositions = [];
+    let uploadedMesh = null;
+    let worldScale = 1;
+    let uploadedBounds = null;
+    let uploadedBuild = null;
+    let processing = false;
+    let stopping = false;
 
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-const initialCamera = new THREE.Vector3(3.7, 3.0, 4.2);
-camera.position.copy(initialCamera);
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 1.12, 0);
-controls.enableDamping = true;
-controls.minDistance = 2.8;
-controls.maxDistance = 8;
-controls.maxPolarAngle = Math.PI * 0.49;
-controls.update();
+    function render() {
+      requestAnimationFrame(render);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      renderer.setSize(rect.width, rect.height, false);
+      camera.aspect = rect.width / rect.height;
+      camera.updateProjectionMatrix();
+    }
+    new ResizeObserver(resize).observe(canvas);
+    window.addEventListener('resize', resize);
+    resize();
+    render();
 
-scene.add(new THREE.HemisphereLight(0xd8edeb, 0x263235, 2.0));
-const keyLight = new THREE.DirectionalLight(0xf0f6ef, 3.1);
-keyLight.position.set(3.5, 5, 3);
-scene.add(keyLight);
-const rimLight = new THREE.DirectionalLight(0x59bbac, 1.4);
-rimLight.position.set(-3, 2.4, -2.5);
-scene.add(rimLight);
+    function setText(id, text) { byId(id).textContent = text; }
+    function addEvent(title, detail, warning = false) {
+      const item = document.createElement('div');
+      item.className = 'event';
+      const time = document.createElement('time');
+      time.textContent = new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date());
+      const copy = document.createElement('div');
+      const heading = document.createElement('strong');
+      heading.textContent = title;
+      if (warning) heading.style.color = 'var(--red)';
+      const note = document.createElement('span');
+      note.textContent = detail;
+      copy.append(heading, note);
+      item.append(time, copy);
+      byId('event-list').prepend(item);
+      while (byId('event-list').children.length > 12) byId('event-list').lastElementChild.remove();
+    }
+    function setStage(phase, status) {
+      const stages = ['upload', 'thermal', 'agent', 'review'];
+      const current = ({
+        sliced: 'thermal', thermal_analysis: 'thermal', thermal_complete: 'agent',
+        agent_running: 'agent', review: 'review', approved: 'review', rejected: 'review',
+      })[phase] || 'upload';
+      for (const stage of stages) {
+        const index = stages.indexOf(stage);
+        const currentIndex = stages.indexOf(current);
+        const card = byId(`step-card-${stage}`);
+        card.classList.toggle('current', stage === current);
+        card.classList.toggle('complete', index < currentIndex || (
+          (phase === 'thermal_complete' && stage === 'thermal') ||
+          (['review', 'approved', 'rejected'].includes(phase) && stage === 'agent') ||
+          (phase === 'approved' && stage === 'review')
+        ));
+      }
+      const labels = {
+        sliced: ['슬라이싱 완료 · 열해석 시작 가능', '열해석 대기', 'Agent 대기', '결과 대기'],
+        thermal_analysis: ['슬라이싱 완료', '열해석 계산 중', '열해석 완료 후 실행', '분석 결과 대기'],
+        thermal_complete: ['슬라이싱 완료', '열해석 완료', 'Agent 가동 가능', '분석 결과 대기'],
+        agent_running: ['슬라이싱 완료', '열해석 완료', '벡터별 추론 중', '결과 집계 중'],
+        review: ['슬라이싱 완료', '열해석 완료', '추론 완료', '승인 또는 거부 필요'],
+        approved: ['슬라이싱 완료', '열해석 완료', '추론 완료', '가상 변수 적용 승인'],
+        rejected: ['슬라이싱 완료', '열해석 완료', '추론 완료', '권고 거부'],
+      }[phase];
+      if (labels) stages.forEach((stage, index) => setText(`step-status-${stage}`, labels[index]));
+      const display = {
+        sliced: '슬라이싱 완료', thermal_analysis: '열해석 중', thermal_complete: '열해석 완료',
+        agent_running: 'Agent 분석 중', review: '승인 대기', approved: '가상 적용 승인',
+        rejected: '권고 거부',
+      }[phase] || status || '대기';
+      setText('phase-label', display);
+      byId('phase-label').className = `status-pill${phase === 'review' ? ' risk' : phase === 'approved' ? ' normal' : ''}`;
+      setText('top-phase', display);
+      byId('connection-dot').className = `dot${uploadedBuild ? ' ready' : ''}`;
+    }
+    async function api(url, options = {}) {
+      const response = await fetch(url, options);
+      const body = await response.text();
+      let payload = null;
+      if (body) {
+        try {
+          payload = JSON.parse(body);
+        } catch {
+          const detail = body.trim().slice(0, 240);
+          throw new Error(
+            `서버가 JSON이 아닌 응답을 반환했습니다 (${response.status || '응답 없음'}): ${detail || response.statusText || '빈 응답'}`,
+          );
+        }
+      }
+      if (!response.ok) {
+        const detail = typeof payload?.detail === 'string' ? payload.detail : response.statusText;
+        throw new Error(detail || `요청 실패 (${response.status})`);
+      }
+      if (payload === null) throw new Error(`서버 응답이 비어 있습니다 (${response.status})`);
+      return payload;
+    }
+    function uploadStlFile(url, file, onProgress) {
+      return new Promise((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open('POST', url);
+        request.setRequestHeader('Content-Type', 'model/stl');
+        request.upload.addEventListener('progress', event => {
+          if (event.lengthComputable) onProgress(event.loaded, event.total);
+        });
+        request.addEventListener('load', () => {
+          const body = request.responseText;
+          let payload = null;
+          if (body) {
+            try {
+              payload = JSON.parse(body);
+            } catch {
+              const detail = body.trim().slice(0, 240);
+              reject(new Error(
+                `서버가 JSON이 아닌 응답을 반환했습니다 (${request.status || '응답 없음'}): ${detail || request.statusText || '빈 응답'}`,
+              ));
+              return;
+            }
+          }
+          if (request.status < 200 || request.status >= 300) {
+            const detail = typeof payload?.detail === 'string' ? payload.detail : request.statusText;
+            reject(new Error(detail || `요청 실패 (${request.status})`));
+            return;
+          }
+          if (payload === null) {
+            reject(new Error(`서버 응답이 비어 있습니다 (${request.status})`));
+            return;
+          }
+          resolve(payload);
+        });
+        request.addEventListener('error', () => reject(new Error('업로드 연결이 끊겼습니다. 서버 상태와 네트워크를 확인하세요.')));
+        request.addEventListener('timeout', () => reject(new Error('업로드 시간이 초과되었습니다. 파일 크기와 서버 상태를 확인하세요.')));
+        request.timeout = 120000;
+        request.send(file);
+      });
+    }
+    function updateUploadProgress(loaded, total) {
+      const percent = total ? Math.min(100, loaded / total * 100) : 0;
+      const bar = byId('upload-progress');
+      const track = bar.parentElement;
+      bar.style.width = `${percent}%`;
+      track.setAttribute('aria-valuenow', String(Math.round(percent)));
+      setText('upload-progress-label', `${Math.round(percent)}%`);
+      setText('job-status', `STL 업로드 중 · ${(loaded / 1024 / 1024).toFixed(1)} / ${(total / 1024 / 1024).toFixed(1)} MiB`);
+    }
+    function updatePath(segments) {
+      if (!segments?.length || !uploadedBounds) return;
+      const points = [];
+      for (const segment of segments) {
+        const [sx, sy, sz] = segment.start_mm;
+        const [ex, ey, ez] = segment.end_mm;
+        const toWorld = (x, y, z) => [
+          x * worldScale,
+          1.18 + z * worldScale,
+          y * worldScale,
+        ];
+        const start = toWorld(sx, sy, sz);
+        const end = toWorld(ex, ey, ez);
+        points.push(...start, ...end);
+        carriage.position.x = end[0];
+        gantry.position.z = end[2];
+        laser.position.set(end[0], 1.52, end[2]);
+        clipPlane.constant = 1.18 + Math.max(0, Math.min(uploadedBounds.height, ez)) * worldScale;
+        if (uploadedMesh) uploadedMesh.material.clippingPlanes = [clipPlane];
+        setText('position-value', `X ${ex.toFixed(2)} · Y ${ey.toFixed(2)} · Z ${ez.toFixed(2)} mm`);
+      }
+      pathPositions.push(...points);
+      if (pathPositions.length > 90000) pathPositions = pathPositions.slice(-90000);
+      scanPath.geometry.dispose();
+      scanPath.geometry = new THREE.BufferGeometry();
+      scanPath.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pathPositions, 3));
+    }
+    async function showUploadedModel(file, build) {
+      const geometry = new STLLoader().parse(await file.arrayBuffer());
+      geometry.computeBoundingBox();
+      const bounds = geometry.boundingBox;
+      const unitsScale = { mm: 1, cm: 10, m: 1000, in: 25.4 }[build.source_units];
+      const size = new THREE.Vector3();
+      bounds.getSize(size);
+      const center = new THREE.Vector3();
+      bounds.getCenter(center);
+      const width = size.x * unitsScale;
+      const depth = size.y * unitsScale;
+      const height = size.z * unitsScale;
+      worldScale = 1.48 / Math.max(width, depth);
+      geometry.applyMatrix4(new THREE.Matrix4().set(
+        worldScale * unitsScale, 0, 0, -center.x * worldScale * unitsScale,
+        0, 0, worldScale * unitsScale, 1.18 - bounds.min.z * worldScale * unitsScale,
+        0, worldScale * unitsScale, 0, -center.y * worldScale * unitsScale,
+        0, 0, 0, 1,
+      ));
+      geometry.computeVertexNormals();
+      if (uploadedMesh) {
+        machine.remove(uploadedMesh);
+        uploadedMesh.geometry.dispose();
+        uploadedMesh.material.dispose();
+      }
+      uploadedMesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
+        color: 0x72869d, metalness: .25, roughness: .55,
+        side: THREE.DoubleSide, clippingPlanes: [clipPlane],
+      }));
+      machine.add(uploadedMesh);
+      uploadedBounds = { width, depth, height };
+      clipPlane.constant = 1.18 + height * worldScale;
+      pathPositions = [];
+      scanPath.geometry.dispose();
+      scanPath.geometry = new THREE.BufferGeometry();
+      setText('scene-overlay', 'STL 모델 · 경로 분석 준비');
+      setText('scene-status', `${build.layer_count} layers · ${build.event_count.toLocaleString()} vectors`);
+      setText('model-meta', `${file.name} · ${width.toFixed(2)} × ${depth.toFixed(2)} × ${height.toFixed(2)} mm`);
+      setText('layer-value', `— / ${build.layer_count}`);
+      setText('vector-value', build.event_count.toLocaleString());
+    }
+    function updateBuild(data) {
+      uploadedBuild = { ...uploadedBuild, ...data };
+      const total = Math.max(data.event_count, 1);
+      byId('thermal-progress').style.width = `${data.thermal_progress_pct || 0}%`;
+      byId('agent-progress').style.width = `${data.agent_progress_pct || 0}%`;
+      setText('layer-value', `${Math.min(data.layer_count, (data.last_result?.segment?.layer_index ?? 0) + 1)} / ${data.layer_count}`);
+      setText('vector-value', data.event_count.toLocaleString());
+      if (data.thermal_summary?.hot_cell_fraction_avg != null) {
+        setText('hot-value', `${(data.thermal_summary.hot_cell_fraction_avg * 100).toFixed(2)}%`);
+        setText('melt-value', `${(data.thermal_summary.reference_threshold_fraction_avg * 100).toFixed(3)}%`);
+        setText('thermal-summary', `벡터 ${data.thermal_event_index.toLocaleString()} / ${total.toLocaleString()} · 평균 hot 영역 ${ (data.thermal_summary.hot_cell_fraction_avg * 100).toFixed(2)}%`);
+      }
+      if (data.segments) updatePath(data.segments);
+      const results = data.results || [];
+      const last = results.length ? results[results.length - 1] : data.last_result;
+      if (last?.physical_state) {
+        const state = last.physical_state;
+        setText('physical-status', state.status === 'normal' ? '정상' : state.status === 'lof_risk' ? 'LOF 위험' : 'Keyhole 위험');
+        byId('physical-status').className = `status-pill ${state.status === 'normal' ? 'normal' : 'risk'}`;
+        setText('lt-geometry', `${last.prediction.melt_width.toFixed(1)} / ${last.prediction.melt_depth.toFixed(1)} μm`);
+        setText('enthalpy-value', state.normalized_enthalpy.toFixed(2));
+        setText('lof-value', state.lof_criterion.toFixed(2));
+        if (data.risk_counts) {
+          setText('direction-value', data.recommendation?.predicted_direction === 'risk_increasing'
+            ? '위험 증가 추세'
+            : data.recommendation?.predicted_direction === 'risk_decreasing'
+              ? '위험 감소 추세'
+              : data.recommendation?.predicted_direction === 'stable'
+                ? '안정 추세' : '분석 중');
+        }
+        setText('agent-summary', `LT 추론 ${data.agent_progress_pct.toFixed(1)}% · ${last.prediction.prediction_model}`);
+        if (results.length) {
+          const latest = results[results.length - 1];
+          addEvent(`벡터 분석 · ${state.status}`, `${latest.decision.recommended_action} · W ${latest.prediction.melt_width.toFixed(1)} / D ${latest.prediction.melt_depth.toFixed(1)} μm`, state.status !== 'normal');
+        }
+      }
+      setStage(data.phase);
+      if (data.phase === 'thermal_complete') {
+        byId('thermal-button').disabled = true;
+        byId('agent-button').disabled = false;
+        setText('thermal-summary', `해석 완료 · ${data.thermal_event_index.toLocaleString()} vectors`);
+      }
+      if (data.phase === 'review' && data.recommendation) {
+        const rec = data.recommendation;
+        setText('recommendation-action', rec.action);
+        setText('recommendation-detail', `${rec.predicted_direction === 'risk_increasing' ? '위험 증가 경향' : rec.predicted_direction === 'risk_decreasing' ? '위험 감소 경향' : rec.predicted_direction === 'stable' ? '위험 안정 경향' : '추세 판단 자료 부족'} · 전체 ${data.agent_cursor.toLocaleString()}개 벡터 중 ${rec.supporting_vectors}개에서 후보 선택`);
+        setText('recommended-power', `${rec.laser_power_w.toFixed(1)} W`);
+        setText('recommended-speed', `${rec.scan_speed_mm_s.toFixed(1)} mm/s`);
+        byId('approve-button').disabled = false;
+        byId('reject-button').disabled = false;
+      }
+      if (data.phase === 'approved' || data.phase === 'rejected') {
+        byId('approve-button').disabled = true;
+        byId('reject-button').disabled = true;
+        setText('recommendation-detail', data.phase === 'approved'
+          ? '승인 완료 · 다음 가상 작업의 공정 변수로 저장됨. 실장비에는 적용되지 않았습니다.'
+          : '권고를 거부했습니다. 공정 변수는 변경하지 않았습니다.');
+      }
+    }
+    const pause = ms => new Promise(resolve => window.setTimeout(resolve, ms));
 
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0x182225, roughness: 0.9 }));
-floor.rotation.x = -Math.PI / 2;
-floor.position.y = -0.04;
-scene.add(floor);
-const grid = new THREE.GridHelper(8, 40, 0x3b5050, 0x263436);
-grid.position.y = -0.025;
-scene.add(grid);
-
-const metal = new THREE.MeshStandardMaterial({ color: 0x68787a, metalness: 0.78, roughness: 0.31 });
-const darkMetal = new THREE.MeshStandardMaterial({ color: 0x303d40, metalness: 0.68, roughness: 0.4 });
-const cabinetMat = new THREE.MeshStandardMaterial({ color: 0x354245, metalness: 0.52, roughness: 0.48 });
-const plateMat = new THREE.MeshStandardMaterial({ color: 0x657174, metalness: 0.72, roughness: 0.35 });
-const glassMat = new THREE.MeshStandardMaterial({ color: 0x64a7a5, transparent: true, opacity: 0.105, roughness: 0.16, metalness: 0.1, depthWrite: false });
-const mintMat = new THREE.MeshStandardMaterial({ color: 0x4bc8a3, emissive: 0x154f41, metalness: 0.35, roughness: 0.35 });
-
-function box(parent, size, position, material) {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), material);
-  mesh.position.set(...position);
-  parent.add(mesh);
-  return mesh;
-}
-
-const machine = new THREE.Group();
-scene.add(machine);
-box(machine, [2.95, 0.23, 2.65], [0, 0.12, 0], darkMetal);
-box(machine, [2.78, 0.68, 2.48], [0, 0.56, 0], cabinetMat);
-box(machine, [2.25, 0.49, 0.025], [0, 0.56, 1.249], darkMetal);
-box(machine, [2.22, 0.04, 0.035], [0, 0.88, 1.23], mintMat);
-
-for (const x of [-1.17, 1.17]) {
-  for (const z of [-1.02, 1.02]) {
-    box(machine, [0.105, 1.42, 0.105], [x, 1.63, z], metal);
-    box(machine, [0.17, 0.065, 0.17], [x, 2.34, z], darkMetal);
-  }
-}
-box(machine, [2.34, 0.09, 0.09], [0, 2.25, -1.02], metal);
-box(machine, [2.34, 0.09, 0.09], [0, 2.25, 1.02], metal);
-box(machine, [0.04, 1.25, 2.03], [-1.22, 1.61, 0], glassMat);
-box(machine, [0.04, 1.25, 2.03], [1.22, 1.61, 0], glassMat);
-box(machine, [2.38, 1.25, 0.035], [0, 1.61, -1.04], glassMat);
-box(machine, [2.38, 1.25, 0.035], [0, 1.61, 1.04], glassMat);
-
-box(machine, [2.03, 0.15, 2.03], [0, 1.01, 0], darkMetal);
-box(machine, [1.82, 0.075, 1.82], [0, 1.125, 0], plateMat);
-box(machine, [1.68, 0.014, 1.68], [0, 1.17, 0], new THREE.MeshStandardMaterial({ color: 0x858777, roughness: 0.95 }));
-for (const x of [-0.89, 0.89]) {
-  for (const z of [-0.89, 0.89]) box(machine, [0.07, 0.06, 0.07], [x, 1.19, z], mintMat);
-}
-for (let index = -7; index <= 7; index += 1) {
-  const lineMat = new THREE.MeshBasicMaterial({ color: 0x4c5850, transparent: true, opacity: 0.28 });
-  box(machine, [0.002, 0.002, 1.62], [index * 0.105, 1.18, 0], lineMat);
-  box(machine, [1.62, 0.002, 0.002], [0, 1.18, index * 0.105], lineMat);
-}
-
-const gantry = new THREE.Group();
-machine.add(gantry);
-for (const x of [-0.94, 0.94]) box(gantry, [0.075, 0.07, 1.75], [x, 2.12, 0], metal);
-box(gantry, [2.04, 0.11, 0.15], [0, 2.08, 0], darkMetal);
-const carriage = new THREE.Group();
-gantry.add(carriage);
-box(carriage, [0.33, 0.15, 0.29], [0, 0.12, 0], metal);
-box(carriage, [0.2, 0.11, 0.2], [0, 0.245, 0], darkMetal);
-box(carriage, [0.13, 0.06, 0.13], [0, 0.33, 0], mintMat);
-const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.037, 0.055, 0.27, 16), metal);
-nozzle.position.y = -0.075;
-carriage.add(nozzle);
-const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.035, 0.045, 16), new THREE.MeshBasicMaterial({ color: 0xff705d }));
-lens.position.y = -0.23;
-carriage.add(lens);
-
-const beamMaterial = new THREE.MeshBasicMaterial({ color: 0xff624e, transparent: true, opacity: 0.34 });
-const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.026, 1, 12), beamMaterial);
-machine.add(beam);
-const spot = new THREE.Mesh(new THREE.SphereGeometry(0.055, 18, 12), new THREE.MeshBasicMaterial({ color: 0xff7542 }));
-spot.scale.set(1, 0.22, 0.8);
-machine.add(spot);
-const spotLight = new THREE.PointLight(0xff663d, 1.8, 0.55);
-machine.add(spotLight);
-
-const chart = document.querySelector('#trend');
-const chartContext = chart.getContext('2d');
-const samples = [];
-const eventList = document.querySelector('#event-list');
-let previousLayer = null;
-let latestPosition = { x: 50, y: 50, z: 1.2 };
-let latestState = null;
-
-function value(id, text) {
-  const element = document.getElementById(id);
-  if (element) element.textContent = text;
-}
-
-function addEvent(title, detail, warning = false) {
-  const row = document.createElement('div');
-  row.className = 'event-row';
-  const eventTime = document.createElement('span');
-  eventTime.className = 'event-time';
-  eventTime.textContent = new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date());
-  const marker = document.createElement('i');
-  marker.className = `event-mark${warning ? ' warn' : ''}`;
-  const copy = document.createElement('div');
-  copy.className = 'event-copy';
-  const heading = document.createElement('div');
-  heading.className = 'event-title';
-  heading.textContent = title;
-  const description = document.createElement('div');
-  description.className = 'event-detail';
-  description.textContent = detail;
-  copy.append(heading, description);
-  row.append(eventTime, marker, copy);
-  eventList.prepend(row);
-  while (eventList.children.length > 5) eventList.lastElementChild.remove();
-}
-
-function update(data) {
-  latestState = data;
-  latestPosition = data.position;
-  const process = data.process;
-  const build = data.build;
-  const machineState = data.machine;
-  const progress = Math.min(100, Math.max(0, build.progress_pct));
-  const positionLabel = `X ${data.position.x.toFixed(2)} · Y ${data.position.y.toFixed(2)} · Z ${data.position.z.toFixed(2)} mm`;
-  const elapsedMinutes = Math.floor(build.elapsed_s / 60);
-  const elapsedSeconds = Math.floor(build.elapsed_s % 60);
-
-  value('equipment', data.equipment_id);
-  value('equipment-heading', data.equipment_id);
-  value('sidebar-equipment', data.equipment_id);
-  value('state', data.state === 'RUNNING' ? '가동 중' : data.state);
-  value('progress-value', progress.toFixed(1));
-  value('layer-value', `${String(build.layer_current).padStart(3, '0')} / ${String(build.layer_total).padStart(3, '0')}`);
-  value('power-value', process.laser_power.toFixed(0));
-  value('speed-value', process.scan_speed.toFixed(0));
-  value('position-value', positionLabel);
-  value('position-detail', `${data.position.x.toFixed(1)} / ${data.position.y.toFixed(1)} mm`);
-  value('scene-layer', `LAYER ${String(build.layer_current).padStart(3, '0')}`);
-  value('scene-track', `TRACK ${String(build.track_current).padStart(3, '0')} / ${String(build.track_total).padStart(3, '0')}`);
-  value('laser-state', machineState.laser);
-  value('interlock-state', machineState.interlock);
-  value('recoater-state', machineState.recoater);
-  value('material-value', build.material);
-  value('job-value', build.job_id);
-  value('build-progress-value', `${progress.toFixed(1)}%`);
-  value('elapsed-value', `경과 ${String(elapsedMinutes).padStart(2, '0')}:${String(elapsedSeconds).padStart(2, '0')}`);
-  value('temperature-value', `${machineState.chamber_temperature.toFixed(1)} °C`);
-  value('oxygen-value', `${machineState.oxygen_ppm.toFixed(0)} ppm`);
-  value('filter-value', `${machineState.filter_load_pct.toFixed(0)} %`);
-  value('width-value', `${process.melt_width.toFixed(1)} μm`);
-  value('geometry-value', `${process.aspect_ratio.toFixed(3)} / ${process.melt_area.toFixed(0)} μm²`);
-  document.querySelector('#progress-bar').style.width = `${progress}%`;
-  document.querySelector('#build-progress-bar').style.width = `${progress}%`;
-  document.querySelector('#connection-label').textContent = '시뮬레이션 연결';
-  document.querySelector('#connection-dot').classList.add('active');
-  document.querySelector('#asset-dot').classList.add('active');
-
-  samples.push({ power: process.laser_power, oxygen: machineState.oxygen_ppm, temperature: machineState.chamber_temperature });
-  if (samples.length > 180) samples.shift();
-  drawTrend();
-  if (previousLayer === null) addEvent('시뮬레이션 피드 연결', `${data.equipment_id} · ${build.material} 빌드 상태 수신`);
-  if (previousLayer !== null && previousLayer !== build.layer_current) addEvent('레이어 전환', `레이어 ${previousLayer} 완료 · 레이어 ${build.layer_current} 스캔 시작`);
-  previousLayer = build.layer_current;
-}
-
-function drawTrend() {
-  const rect = chart.getBoundingClientRect();
-  if (!rect.width || !rect.height) return;
-  const ratio = Math.min(window.devicePixelRatio || 1, 2);
-  const width = Math.round(rect.width * ratio);
-  const height = Math.round(rect.height * ratio);
-  if (chart.width !== width || chart.height !== height) {
-    chart.width = width;
-    chart.height = height;
-  }
-  chartContext.setTransform(ratio, 0, 0, ratio, 0, 0);
-  const w = rect.width;
-  const h = rect.height;
-  chartContext.clearRect(0, 0, w, h);
-  const left = 31;
-  const right = 10;
-  const top = 13;
-  const bottom = 20;
-  const graphW = w - left - right;
-  const graphH = h - top - bottom;
-  chartContext.font = '8px "IBM Plex Mono", monospace';
-  chartContext.textBaseline = 'middle';
-  for (let index = 0; index <= 3; index += 1) {
-    const y = top + graphH * index / 3;
-    chartContext.strokeStyle = '#2c3a3c';
-    chartContext.lineWidth = 1;
-    chartContext.beginPath();
-    chartContext.moveTo(left, y);
-    chartContext.lineTo(w - right, y);
-    chartContext.stroke();
-    chartContext.fillStyle = '#718282';
-    chartContext.fillText(`${300 - index * 100}`, 3, y);
-  }
-  chartContext.fillStyle = '#718282';
-  chartContext.fillText('-6s', left, h - 7);
-  chartContext.fillText('NOW', w - right - 22, h - 7);
-
-  const series = [
-    { key: 'power', min: 0, max: 300, color: '#73c8dc' },
-    { key: 'oxygen', min: 60, max: 110, color: '#55d6b1' },
-    { key: 'temperature', min: 25, max: 32, color: '#e7b76b' },
-  ];
-  for (const item of series) {
-    chartContext.beginPath();
-    chartContext.strokeStyle = item.color;
-    chartContext.lineWidth = 1.5;
-    samples.forEach((sample, index) => {
-      const x = left + graphW * index / Math.max(samples.length - 1, 1);
-      const normalized = Math.max(0, Math.min(1, (sample[item.key] - item.min) / (item.max - item.min)));
-      const y = top + graphH * (1 - normalized);
-      if (index === 0) chartContext.moveTo(x, y);
-      else chartContext.lineTo(x, y);
+    byId('upload-button').addEventListener('click', async () => {
+      const file = byId('stl-file').files[0];
+      if (!file) {
+        setText('job-status', '먼저 STL 파일을 선택하세요.');
+        return;
+      }
+      if (file.size > 15 * 1024 * 1024) {
+        setText('job-status', '파일 크기는 15 MiB 이하로 제한됩니다.');
+        return;
+      }
+      byId('upload-button').disabled = true;
+      byId('reset-button').disabled = true;
+      byId('upload-progress').style.width = '0%';
+      byId('upload-progress').parentElement.setAttribute('aria-valuenow', '0');
+      setText('upload-progress-label', '0%');
+      setText('job-status', 'STL 업로드 준비 중');
+      try {
+        const units = byId('source-units').value;
+        const build = await uploadStlFile(
+          `/api/builds?source_units=${encodeURIComponent(units)}`,
+          file,
+          updateUploadProgress,
+        );
+        setText('upload-progress-label', '처리 중');
+        setText('job-status', '업로드 완료 · 서버에서 STL 검사 및 슬라이싱 중');
+        uploadedBuild = build;
+        await showUploadedModel(file, build);
+        byId('thermal-button').disabled = false;
+        byId('agent-button').disabled = true;
+        byId('reset-button').disabled = false;
+        byId('approve-button').disabled = true;
+        byId('reject-button').disabled = true;
+        byId('upload-progress').style.width = '100%';
+        byId('upload-progress').parentElement.setAttribute('aria-valuenow', '100');
+        setText('upload-progress-label', '완료');
+        setText('job-status', `슬라이싱 완료 · ${build.profile_origin}`);
+        setText('profile-meta', `${build.material} · ${build.process.laser_power_w} W · ${build.process.scan_speed_mm_s} mm/s`);
+        setStage(build.phase);
+        addEvent('STL 등록 및 슬라이싱 완료', `${build.layer_count} layers · ${build.event_count.toLocaleString()} vectors`);
+      } catch (error) {
+        setText('job-status', `등록 실패 · ${error.message}`);
+        setText('upload-progress-label', '실패');
+        byId('connection-dot').className = 'dot error';
+        addEvent('STL 등록 실패', error.message, true);
+      } finally {
+        byId('upload-button').disabled = false;
+        byId('reset-button').disabled = !uploadedBuild;
+      }
     });
-    chartContext.stroke();
-  }
-}
-
-function resize() {
-  const width = canvas.clientWidth;
-  const height = canvas.clientHeight;
-  if (!width || !height) return;
-  camera.aspect = width / height;
-  camera.updateProjectionMatrix();
-  renderer.setSize(width, height, false);
-  drawTrend();
-}
-
-const resizeObserver = new ResizeObserver(resize);
-resizeObserver.observe(canvas);
-resizeObserver.observe(chart);
-window.addEventListener('resize', resize);
-document.querySelector('#reset-view').addEventListener('click', () => {
-  camera.position.copy(initialCamera);
-  controls.target.set(0, 1.12, 0);
-  controls.update();
-});
-
-function mapBuildCoordinate(value) {
-  return (value / 100 - 0.5) * 1.8;
-}
-
-function animate(time) {
-  requestAnimationFrame(animate);
-  controls.update();
-  if (latestState) {
-    const worldX = mapBuildCoordinate(latestPosition.x);
-    const worldZ = mapBuildCoordinate(latestPosition.y);
-    const buildSurface = 1.18 + Math.min(latestPosition.z / 3.6, 1) * 0.12;
-    const headY = 1.83;
-    gantry.position.z = worldZ;
-    carriage.position.x = worldX;
-    beam.position.set(worldX, (headY + buildSurface) / 2, worldZ);
-    beam.scale.y = headY - buildSurface;
-    spot.position.set(worldX, buildSurface + 0.012, worldZ);
-    spotLight.position.copy(spot.position);
-    spot.material.opacity = 0.52 + Math.sin(time * 0.014) * 0.12;
-  }
-  renderer.render(scene, camera);
-}
-
-resize();
-requestAnimationFrame(animate);
-window.setInterval(() => {
-  document.querySelector('#clock').textContent = new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date());
-}, 1000);
-
-function connect() {
-  const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-  const socket = new WebSocket(`${protocol}://${location.host}/ws/dt`);
-  socket.onopen = () => socket.send('subscribe');
-  socket.onmessage = event => {
-    try { update(JSON.parse(event.data)); }
-    catch (error) { console.error('Invalid digital twin payload', error); }
-  };
-  socket.onclose = () => {
-    document.querySelector('#connection-label').textContent = '연결 끊김 · 재시도';
-    document.querySelector('#connection-dot').classList.remove('active');
-    document.querySelector('#asset-dot').classList.remove('active');
-    window.setTimeout(connect, 2000);
-  };
-  socket.onerror = () => socket.close();
-}
-connect();
-</script>
+    byId('thermal-button').addEventListener('click', async () => {
+      if (!uploadedBuild || processing) return;
+      processing = true;
+      byId('thermal-button').disabled = true;
+      setText('job-status', 'FiPy 열해석 수행 중');
+      try {
+        let result;
+        do {
+          result = await api(`/api/builds/${uploadedBuild.build_id}/thermal-step?count=16`, { method: 'POST' });
+          updateBuild(result);
+          await pause(40);
+        } while (!stopping && result.phase === 'thermal_analysis');
+        if (stopping) {
+          stopping = false;
+          return;
+        }
+        if (result.phase === 'thermal_complete') {
+          setText('job-status', '열해석 완료 · 사용자 승인 후 AI Agent를 시작할 수 있습니다.');
+          addEvent('FiPy 열해석 완료', `${result.thermal_event_index.toLocaleString()} scan vectors`);
+        }
+      } catch (error) {
+        setText('job-status', `열해석 실패 · ${error.message}`);
+        addEvent('열해석 실패', error.message, true);
+        byId('thermal-button').disabled = false;
+      } finally {
+        processing = false;
+      }
+    });
+    byId('agent-button').addEventListener('click', async () => {
+      if (!uploadedBuild || processing) return;
+      processing = true;
+      byId('agent-button').disabled = true;
+      setText('job-status', 'AI Agent가 스캔 벡터를 분석 중');
+      try {
+        await api(`/api/builds/${uploadedBuild.build_id}/agent/start`, { method: 'POST' });
+        let result;
+        do {
+          result = await api(`/api/builds/${uploadedBuild.build_id}/agent/step?count=16`, { method: 'POST' });
+          updateBuild(result);
+          await pause(35);
+        } while (!stopping && result.phase === 'agent_running');
+        if (stopping) {
+          stopping = false;
+          return;
+        }
+        if (result.phase === 'review') {
+          setText('job-status', '분석 완료 · 권고 내용을 확인하고 승인 또는 거부하세요.');
+          addEvent('AI Agent 분석 완료', `권고 · ${result.recommendation.action}`, result.recommendation.action !== '공정 유지');
+        }
+      } catch (error) {
+        setText('job-status', `Agent 실행 실패 · ${error.message}`);
+        addEvent('Agent 실행 실패', error.message, true);
+        byId('agent-button').disabled = false;
+      } finally {
+        processing = false;
+      }
+    });
+    async function review(approved) {
+      if (!uploadedBuild || processing) return;
+      byId('approve-button').disabled = true;
+      byId('reject-button').disabled = true;
+      try {
+        const result = await api(`/api/builds/${uploadedBuild.build_id}/review`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ approved }),
+        });
+        updateBuild(result);
+        addEvent(approved ? '권고 승인 · 가상 변수 적용' : '권고 거부', approved
+          ? `${result.recommendation.laser_power_w} W · ${result.recommendation.scan_speed_mm_s} mm/s · 다음 가상 작업에 저장`
+          : '공정 변수 변경 없음');
+      } catch (error) {
+        setText('job-status', `승인 처리 실패 · ${error.message}`);
+        byId('approve-button').disabled = false;
+        byId('reject-button').disabled = false;
+      }
+    }
+    byId('approve-button').addEventListener('click', () => review(true));
+    byId('reject-button').addEventListener('click', () => review(false));
+    byId('reset-button').addEventListener('click', () => window.location.reload());
+    window.setInterval(() => {
+      byId('clock').textContent = new Intl.DateTimeFormat('ko-KR', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+      }).format(new Date());
+    }, 1000);
+  </script>
 </body>
 </html>

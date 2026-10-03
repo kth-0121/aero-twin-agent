@@ -50,6 +50,8 @@ class GeometryPrediction:
     uncertainty_sigma_approx: Mapping[str, float]
     loop_predictions: tuple[Mapping[str, float], ...]
     sensor_source: str
+    physics_anchor: Mapping[str, float] = field(default_factory=dict)
+    history_events: int = 0
     model_version: str = "LT-V5"
 
     @property
@@ -69,6 +71,8 @@ class GeometryPrediction:
             "lt_uncertainty_sigma_approx": dict(self.uncertainty_sigma_approx),
             "lt_loop_predictions": [dict(row) for row in self.loop_predictions],
             "lt_sensor_source": self.sensor_source,
+            "rosenthal_anchor": dict(self.physics_anchor),
+            "lt_history_events": self.history_events,
         }
 
 
