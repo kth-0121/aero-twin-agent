@@ -7,7 +7,7 @@ The FastAPI console uses an operator-gated job sequence:
 3. Start the LT V5 Agent explicitly after thermal replay completes. It predicts geometry per scan vector, evaluates physical constraints, and checks candidate adjustments with the Rosenthal ROM.
 4. Review the aggregated process-variable recommendation and approve or reject it. Approval stores the values for the next virtual job only.
 
-The application starts idle. It does not replay a synthetic build, run the Agent, or send machine commands at startup.
+The application starts idle. It does not replay a synthetic build, run the Agent, or send machine commands at startup. If the operator starts the workflow without selecting an STL, the console loads the bundled `nozzle.preview.cli` path and `nozzle.stl` model when those files are present. The view renders the complete CLI path using a compact 0.01 mm binary coordinate stream; thermal/Agent analysis uses a deterministic sample of at most 100,000 vectors. Uploading an STL continues to use that STL and the regular slicing flow.
 
 Run from the repository root:
 
@@ -15,11 +15,16 @@ Run from the repository root:
 python -m uvicorn digitaltwin.backend.main:app --host 0.0.0.0 --port 8000
 ```
 
-The interface follows a restrained service-supervision layout: compact workflow cards, status summaries, and an equipment/build view. Its system font stack is Arial/Noto Sans KR; it does not download IBM Plex fonts.
+The interface follows a restrained service-supervision layout: compact workflow cards, status summaries, and an equipment/build view. Its system font stack is Arial/Noto Sans KR; it does not download IBM Plex fonts. STL models are displayed at their actual scale relative to the configured 250 × 250 mm build plate rather than being enlarged to nearly fill the plate.
+
+The hatch generator scans the source polygon directly along alternating X/Y axes, avoiding per-vector geometry rotation. Layer progress is exposed while slicing and shown in the STL job card. On a local benchmark using a 1,280-face icosphere scaled to 20 × 20 × 4 mm (134 layers, 30,513 scan vectors), median slicing time fell from 4.361 s to 2.343 s; actual part times depend on mesh complexity, layer count, and hatch spacing.
 
 ## Workflow API
 
 - `POST /api/builds?source_units=mm` — upload raw STL bytes and prepare scan vectors.
+- `POST /api/builds/preview` — load the bundled nozzle CLI path; the response reports full and sampled vector counts.
+- `GET /api/builds/{id}/toolpath` — return the bounded analysis sample as JSON.
+- `GET /api/builds/{id}/toolpath/full` — return the complete bundled CLI path as signed 16-bit coordinates at 0.01 mm resolution.
 - `POST /api/builds/{id}/thermal-step?count=16` — advance the 2D FiPy replay; repeat until `phase=thermal_complete`.
 - `POST /api/builds/{id}/agent/start` — load and start the LT Agent; only accepted after thermal analysis.
 - `POST /api/builds/{id}/agent/step?count=16` — process scan vectors; repeat until `phase=review`.

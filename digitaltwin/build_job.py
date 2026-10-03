@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Iterator
+from typing import Callable, Iterator
 
 from .cli_toolpath import CLIJob, PathSegment, read_cli
 from .process import BuildSettings
@@ -97,14 +97,23 @@ def _validate_plan(settings: BuildSettings, cli_job: CLIJob) -> None:
         raise ValueError("chamber oxygen is above the configured limit; purge is incomplete")
     if not cli_job.segments:
         raise ValueError("CLI job has no scan vectors")
-    x_values = [coordinate for segment in cli_job.segments for coordinate in (segment.start_mm[0], segment.end_mm[0])]
-    y_values = [coordinate for segment in cli_job.segments for coordinate in (segment.start_mm[1], segment.end_mm[1])]
-    z_values = [segment.z_mm for segment in cli_job.segments]
-    if max(x_values) - min(x_values) > settings.machine.build_width_mm:
+    if cli_job.bounds_mm is not None:
+        minimum, maximum = cli_job.bounds_mm
+        width_mm = maximum[0] - minimum[0]
+        depth_mm = maximum[1] - minimum[1]
+        height_mm = maximum[2]
+    else:
+        x_values = [coordinate for segment in cli_job.segments for coordinate in (segment.start_mm[0], segment.end_mm[0])]
+        y_values = [coordinate for segment in cli_job.segments for coordinate in (segment.start_mm[1], segment.end_mm[1])]
+        z_values = [segment.z_mm for segment in cli_job.segments]
+        width_mm = max(x_values) - min(x_values)
+        depth_mm = max(y_values) - min(y_values)
+        height_mm = max(z_values)
+    if width_mm > settings.machine.build_width_mm:
         raise ValueError("CLI toolpath width exceeds machine build volume")
-    if max(y_values) - min(y_values) > settings.machine.build_depth_mm:
+    if depth_mm > settings.machine.build_depth_mm:
         raise ValueError("CLI toolpath depth exceeds machine build volume")
-    if max(z_values) > settings.machine.build_height_mm:
+    if height_mm > settings.machine.build_height_mm:
         raise ValueError("CLI toolpath height exceeds machine build volume")
 
 
@@ -121,12 +130,39 @@ def _center_cli_job(cli_job: CLIJob) -> CLIJob:
         )
         for segment in cli_job.segments
     )
-    return replace(cli_job, segments=centered_segments)
+    bounds = cli_job.bounds_mm
+    centered_bounds = None
+    if bounds is not None:
+        centered_bounds = (
+            (
+                bounds[0][0] - center_x,
+                bounds[0][1] - center_y,
+                bounds[0][2],
+            ),
+            (
+                bounds[1][0] - center_x,
+                bounds[1][1] - center_y,
+                bounds[1][2],
+            ),
+        )
+    return replace(cli_job, segments=centered_segments, bounds_mm=centered_bounds)
 
 
-def load_cli_build_plan(cli_path: str | Path, settings: BuildSettings) -> BuildPlan:
+def load_cli_build_plan(
+    cli_path: str | Path,
+    settings: BuildSettings,
+    *,
+    max_segments: int | None = None,
+    segment_callback: Callable[[PathSegment], None] | None = None,
+) -> BuildPlan:
     """Load an existing CLI file and validate it against the selected job."""
-    cli_job = _center_cli_job(read_cli(cli_path))
+    cli_job = _center_cli_job(
+        read_cli(
+            cli_path,
+            max_segments=max_segments,
+            segment_callback=segment_callback,
+        )
+    )
     _validate_plan(settings, cli_job)
     return BuildPlan(settings=settings, cli_job=cli_job)
 
@@ -137,6 +173,7 @@ def create_build_plan(
     settings: BuildSettings,
     *,
     source_units: str = "mm",
+    slicing_progress: Callable[[int, int], None] | None = None,
 ) -> BuildPlan:
     """Run STL -> CLI -> validated event plan for one configured build job."""
     settings.validate()
@@ -149,6 +186,7 @@ def create_build_plan(
         hatch_spacing_mm=settings.process.hatch_spacing_mm,
         source_units=source_units,
         label=settings.job_id,
+        progress_callback=slicing_progress,
     )
     machine = settings.machine
     if conversion.build_width_mm > machine.build_width_mm:

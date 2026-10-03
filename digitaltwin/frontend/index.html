@@ -60,9 +60,11 @@
     input[type="file"] { width: 100%; min-width: 0; color: var(--muted); font-size: 11px; }
     select { height: 31px; padding: 0 7px; border: 1px solid #b9c1ca; border-radius: 2px; background: white; color: var(--ink); }
     .upload-progress { display: grid; grid-template-columns: minmax(0, 1fr) 42px; align-items: center; gap: 9px; padding: 0 12px 9px; }
-    .upload-progress .progress-track { height: 5px; border: 1px solid #d6d9de; }
+    .upload-progress .progress-track { height: 5px; overflow: hidden; border: 1px solid #d6d9de; }
     .upload-progress .progress-track span { transition: width .12s linear; }
+    .upload-progress .progress-track.processing span { width: 32%; animation: upload-scan 1.2s ease-in-out infinite alternate; }
     .upload-progress-label { color: var(--muted); font-size: 10px; text-align: right; }
+    @keyframes upload-scan { from { transform: translateX(0); } to { transform: translateX(210%); } }
     .job-meta { display: flex; justify-content: space-between; gap: 12px; padding: 0 12px 10px; color: var(--muted); font-size: 10px; }
     .progress-track { height: 3px; background: #e3e6ea; }
     .progress-track span { display: block; width: 0; height: 100%; background: var(--blue); transition: width .15s linear; }
@@ -178,14 +180,14 @@
     <section class="card">
       <div class="card-head">
         <span class="card-title">작업 입력</span>
-        <span id="job-status" class="card-subtitle">STL을 등록하면 슬라이싱 결과만 준비됩니다. 분석은 별도 시작합니다.</span>
+        <span id="job-status" class="card-subtitle">STL 업로드 또는 내장 nozzle.preview.cli 경로를 사용할 수 있습니다.</span>
       </div>
       <div class="upload-row">
         <input id="stl-file" type="file" accept=".stl,model/stl" aria-label="출력물 STL 파일" />
         <select id="source-units" aria-label="STL 단위">
           <option value="mm">mm</option><option value="cm">cm</option><option value="m">m</option><option value="in">in</option>
         </select>
-        <button id="upload-button" class="primary" type="button">STL 등록 · 슬라이싱</button>
+        <button id="upload-button" class="primary" type="button">슬라이싱 시작</button>
         <button id="reset-button" type="button" disabled>새 작업</button>
       </div>
       <div class="upload-progress">
@@ -329,6 +331,11 @@
     }
     block(machine, [2.8, .2, 2.45], [0, .12, 0], darkMetal);
     block(machine, [2.65, .65, 2.3], [0, .52, 0], cabinet);
+    block(machine, [2.65, .08, 2.3], [0, .9, 0], darkMetal);
+    block(machine, [2.55, 2.05, .1], [0, 1.58, -1.12], cabinet);
+    block(machine, [.1, 2.05, 2.2], [-1.23, 1.58, 0], cabinet);
+    block(machine, [.1, 2.05, 2.2], [1.23, 1.58, 0], cabinet);
+    block(machine, [2.7, .16, 2.35], [0, 2.58, 0], cabinet);
     block(machine, [2.2, .12, .08], [0, .9, 0], metal);
     block(machine, [1.95, .12, 1.95], [0, 1.02, 0], darkMetal);
     block(machine, [1.78, .07, 1.78], [0, 1.12, 0], metal);
@@ -343,6 +350,9 @@
     block(machine, [2.18, 1.1, .025], [0, 1.58, .96], glass);
     block(machine, [.025, 1.1, 1.9], [-1.1, 1.58, 0], glass);
     block(machine, [.025, 1.1, 1.9], [1.1, 1.58, 0], glass);
+    block(machine, [.42, .62, .055], [1.08, 1.48, 1.19], darkMetal);
+    block(machine, [.3, .22, .018], [1.08, 1.58, 1.226], blue);
+    block(machine, [2.35, .035, .025], [0, .62, 1.16], metal);
     const gantry = new THREE.Group();
     machine.add(gantry);
     block(gantry, [2.0, .1, .13], [0, 2.08, 0], darkMetal);
@@ -359,6 +369,11 @@
 
     const scanPath = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x124191 }));
     machine.add(scanPath);
+    const fullToolpath = new THREE.LineSegments(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0x687788, transparent: true, opacity: 0.55 }),
+    );
+    machine.add(fullToolpath);
     let pathPositions = [];
     let uploadedMesh = null;
     let worldScale = 1;
@@ -536,6 +551,26 @@
     }
     async function showUploadedModel(file, build) {
       const geometry = new STLLoader().parse(await file.arrayBuffer());
+      showModelGeometry(geometry, file.name, build);
+    }
+    async function showPreviewModel(build) {
+      if (!build.preview_mesh_url) {
+        const bedWidthMm = build.machine_build_volume_mm?.width || 250;
+        const bedDepthMm = build.machine_build_volume_mm?.depth || 250;
+        worldScale = 1.62 / Math.max(bedWidthMm, bedDepthMm);
+        uploadedBounds = {
+          width: bedWidthMm,
+          depth: bedDepthMm,
+          height: 0,
+        };
+        setText('model-meta', `${build.source_name} · 툴패스 미리보기`);
+        setText('scene-overlay', 'CLI 툴패스 · 메시 파일 없음');
+        return;
+      }
+      const geometry = await new STLLoader().loadAsync(build.preview_mesh_url);
+      showModelGeometry(geometry, build.source_name, build);
+    }
+    function showModelGeometry(geometry, modelName, build) {
       geometry.computeBoundingBox();
       const bounds = geometry.boundingBox;
       const unitsScale = { mm: 1, cm: 10, m: 1000, in: 25.4 }[build.source_units];
@@ -546,7 +581,9 @@
       const width = size.x * unitsScale;
       const depth = size.y * unitsScale;
       const height = size.z * unitsScale;
-      worldScale = 1.48 / Math.max(width, depth);
+      const bedWidthMm = build.machine_build_volume_mm?.width || 250;
+      const bedDepthMm = build.machine_build_volume_mm?.depth || 250;
+      worldScale = 1.62 / Math.max(bedWidthMm, bedDepthMm);
       geometry.applyMatrix4(new THREE.Matrix4().set(
         worldScale * unitsScale, 0, 0, -center.x * worldScale * unitsScale,
         0, 0, worldScale * unitsScale, 1.18 - bounds.min.z * worldScale * unitsScale,
@@ -569,11 +606,35 @@
       pathPositions = [];
       scanPath.geometry.dispose();
       scanPath.geometry = new THREE.BufferGeometry();
+      fullToolpath.geometry.dispose();
+      fullToolpath.geometry = new THREE.BufferGeometry();
       setText('scene-overlay', 'STL 모델 · 경로 분석 준비');
-      setText('scene-status', `${build.layer_count} layers · ${build.event_count.toLocaleString()} vectors`);
-      setText('model-meta', `${file.name} · ${width.toFixed(2)} × ${depth.toFixed(2)} × ${height.toFixed(2)} mm`);
-      setText('layer-value', `— / ${build.layer_count}`);
-      setText('vector-value', build.event_count.toLocaleString());
+      setText('scene-status', build.layer_count != null
+        ? `${build.layer_count} layers · ${build.event_count.toLocaleString()} vectors`
+        : '서버에서 슬라이싱 중');
+      setText('model-meta', `${modelName} · ${width.toFixed(2)} × ${depth.toFixed(2)} × ${height.toFixed(2)} mm`);
+      setText('layer-value', build.layer_count != null ? `— / ${build.layer_count}` : '슬라이싱 중');
+      setText('vector-value', build.event_count != null ? build.event_count.toLocaleString() : '계산 중');
+    }
+    function displayPathPreview(buffer) {
+      if (!buffer.byteLength || !uploadedBounds) return;
+      const packed = new Int16Array(buffer);
+      if (packed.length % 6 !== 0) {
+        throw new Error('내장 툴패스 데이터 형식이 올바르지 않습니다.');
+      }
+      const positions = new Float32Array(packed.length);
+      const scale = worldScale / 100;
+      for (let index = 0; index < packed.length; index += 6) {
+        positions[index] = packed[index] * scale;
+        positions[index + 1] = 1.18 + packed[index + 2] * scale;
+        positions[index + 2] = packed[index + 1] * scale;
+        positions[index + 3] = packed[index + 3] * scale;
+        positions[index + 4] = 1.18 + packed[index + 5] * scale;
+        positions[index + 5] = packed[index + 4] * scale;
+      }
+      fullToolpath.geometry.dispose();
+      fullToolpath.geometry = new THREE.BufferGeometry();
+      fullToolpath.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     }
     function updateBuild(data) {
       uploadedBuild = { ...uploadedBuild, ...data };
@@ -638,11 +699,7 @@
 
     byId('upload-button').addEventListener('click', async () => {
       const file = byId('stl-file').files[0];
-      if (!file) {
-        setText('job-status', '먼저 STL 파일을 선택하세요.');
-        return;
-      }
-      if (file.size > 15 * 1024 * 1024) {
+      if (file && file.size > 15 * 1024 * 1024) {
         setText('job-status', '파일 크기는 15 MiB 이하로 제한됩니다.');
         return;
       }
@@ -650,19 +707,74 @@
       byId('reset-button').disabled = true;
       byId('upload-progress').style.width = '0%';
       byId('upload-progress').parentElement.setAttribute('aria-valuenow', '0');
-      setText('upload-progress-label', '0%');
-      setText('job-status', 'STL 업로드 준비 중');
+      setText('upload-progress-label', file ? '0%' : 'CLI 준비');
+      setText('job-status', file ? 'STL 업로드 준비 중' : '내장 nozzle.preview.cli 준비 중');
       try {
-        const units = byId('source-units').value;
-        const build = await uploadStlFile(
-          `/api/builds?source_units=${encodeURIComponent(units)}`,
-          file,
-          updateUploadProgress,
-        );
-        setText('upload-progress-label', '처리 중');
-        setText('job-status', '업로드 완료 · 서버에서 STL 검사 및 슬라이싱 중');
-        uploadedBuild = build;
-        await showUploadedModel(file, build);
+        let build;
+        const uploadTrack = byId('upload-progress').parentElement;
+        uploadTrack.classList.add('processing');
+        byId('upload-progress').style.width = '32%';
+        setText('upload-progress-label', '슬라이싱');
+        if (file) {
+          const units = byId('source-units').value;
+          build = await uploadStlFile(
+            `/api/builds?source_units=${encodeURIComponent(units)}`,
+            file,
+            updateUploadProgress,
+          );
+          uploadedBuild = build;
+          await showUploadedModel(file, build);
+          setText('job-status', '업로드 완료 · 서버에서 STL 검사 및 슬라이싱 중');
+        } else {
+          const capabilities = await api('/api/capabilities');
+          if (!capabilities.preview_cli_available) {
+            throw new Error('STL 파일을 선택하거나 내장 nozzle.preview.cli를 확인하세요.');
+          }
+          build = await api('/api/builds/preview', { method: 'POST' });
+          uploadedBuild = build;
+          await showPreviewModel(build);
+          setText('job-status', '내장 CLI 경로 읽기 및 분석 벡터 샘플링 중');
+        }
+        while (uploadedBuild.phase === 'slicing') {
+          await pause(750);
+          const result = await api(`/api/builds/${uploadedBuild.build_id}`);
+          uploadedBuild = { ...uploadedBuild, ...result };
+          if (result.phase === 'slice_failed') {
+            throw new Error(result.error || 'STL 슬라이싱에 실패했습니다.');
+          }
+          if (result.phase === 'slicing') {
+            if (result.slicing_layer_count) {
+              const percent = Math.min(100, result.slicing_progress_pct || 0);
+              uploadTrack.classList.remove('processing');
+              byId('upload-progress').style.width = `${percent}%`;
+              uploadTrack.setAttribute('aria-valuenow', String(Math.round(percent)));
+              setText('upload-progress-label', `${Math.round(percent)}%`);
+              setText(
+                'job-status',
+                `슬라이싱 중 · ${result.slicing_layer.toLocaleString()} / ${result.slicing_layer_count.toLocaleString()} layers`,
+              );
+            } else {
+              setText('job-status', result.source_name
+                ? '내장 CLI 경로 검사 및 분석 벡터 샘플링 중'
+                : '메시 검사 및 레이어 계산 중');
+            }
+            continue;
+          }
+          if (result.phase !== 'sliced') {
+            throw new Error(`예상하지 못한 작업 상태입니다: ${result.phase}`);
+          }
+          break;
+        }
+        if (file) {
+          setText('scene-status', `${uploadedBuild.layer_count} layers · ${uploadedBuild.event_count.toLocaleString()} vectors`);
+          setText('layer-value', `— / ${uploadedBuild.layer_count}`);
+          setText('vector-value', uploadedBuild.event_count.toLocaleString());
+        } else {
+          const response = await fetch(`/api/builds/${uploadedBuild.build_id}/toolpath/full`);
+          if (!response.ok) throw new Error(`전체 툴패스 응답 오류 (${response.status})`);
+          displayPathPreview(await response.arrayBuffer());
+          setText('scene-overlay', `내장 CLI 경로 · ${uploadedBuild.source_vector_count.toLocaleString()} vectors`);
+        }
         byId('thermal-button').disabled = false;
         byId('agent-button').disabled = true;
         byId('reset-button').disabled = false;
@@ -671,16 +783,20 @@
         byId('upload-progress').style.width = '100%';
         byId('upload-progress').parentElement.setAttribute('aria-valuenow', '100');
         setText('upload-progress-label', '완료');
-        setText('job-status', `슬라이싱 완료 · ${build.profile_origin}`);
-        setText('profile-meta', `${build.material} · ${build.process.laser_power_w} W · ${build.process.scan_speed_mm_s} mm/s`);
-        setStage(build.phase);
-        addEvent('STL 등록 및 슬라이싱 완료', `${build.layer_count} layers · ${build.event_count.toLocaleString()} vectors`);
+        const analysisNote = uploadedBuild.analysis_sampled
+          ? ` · 분석 ${uploadedBuild.event_count.toLocaleString()} / 전체 ${uploadedBuild.source_vector_count.toLocaleString()} vectors`
+          : '';
+        setText('job-status', `경로 준비 완료 · ${uploadedBuild.source_name}${analysisNote}`);
+        setText('profile-meta', `${uploadedBuild.material} · ${uploadedBuild.process.laser_power_w} W · ${uploadedBuild.process.scan_speed_mm_s} mm/s`);
+        setStage(uploadedBuild.phase);
+        addEvent('경로 준비 완료', `${uploadedBuild.layer_count} layers · 분석 ${uploadedBuild.event_count.toLocaleString()} vectors`);
       } catch (error) {
-        setText('job-status', `등록 실패 · ${error.message}`);
+        setText('job-status', `경로 준비 실패 · ${error.message}`);
         setText('upload-progress-label', '실패');
         byId('connection-dot').className = 'dot error';
-        addEvent('STL 등록 실패', error.message, true);
+        addEvent('경로 준비 실패', error.message, true);
       } finally {
+        byId('upload-progress').parentElement.classList.remove('processing');
         byId('upload-button').disabled = false;
         byId('reset-button').disabled = !uploadedBuild;
       }
@@ -693,7 +809,7 @@
       try {
         let result;
         do {
-          result = await api(`/api/builds/${uploadedBuild.build_id}/thermal-step?count=16`, { method: 'POST' });
+          result = await api(`/api/builds/${uploadedBuild.build_id}/thermal-step?count=64`, { method: 'POST' });
           updateBuild(result);
           await pause(40);
         } while (!stopping && result.phase === 'thermal_analysis');
@@ -722,7 +838,7 @@
         await api(`/api/builds/${uploadedBuild.build_id}/agent/start`, { method: 'POST' });
         let result;
         do {
-          result = await api(`/api/builds/${uploadedBuild.build_id}/agent/step?count=16`, { method: 'POST' });
+          result = await api(`/api/builds/${uploadedBuild.build_id}/agent/step?count=64`, { method: 'POST' });
           updateBuild(result);
           await pause(35);
         } while (!stopping && result.phase === 'agent_running');

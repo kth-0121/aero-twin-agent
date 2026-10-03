@@ -1,5 +1,8 @@
 import asyncio
+from array import array
+import logging
 import math
+import sys
 import tempfile
 import time
 from dataclasses import dataclass, field, asdict, replace
@@ -9,12 +12,12 @@ from threading import Lock
 from typing import Literal
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Query, Request, status
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from ..build_job import BuildPlan, create_build_plan
+from ..build_job import BuildPlan, create_build_plan, load_cli_build_plan
 from ..fipy_dt import FiPyThermalTwin
 from ..process import demo_316l_settings
 from .lt_contracts import GeometryPredictor, LTRequest
@@ -23,7 +26,12 @@ from sim.decision import recommend_action_from_prediction
 from sim.lpbf import evaluate_physical_state
 
 app = FastAPI(title="Physical AI Digital Twin")
+logger = logging.getLogger(__name__)
 FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
+PREVIEW_CLI_PATH = Path(__file__).resolve().parents[1] / "nozzle.preview.cli"
+PREVIEW_STL_PATH = Path(__file__).resolve().parents[1] / "nozzle.stl"
+MAX_ANALYSIS_VECTORS = 100_000
+MAX_DISPLAY_VECTORS = 15_000
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
 @dataclass
@@ -243,10 +251,19 @@ class LPBFCellSimulation:
 @dataclass
 class BuildReplaySession:
     build_id: str
-    plan: BuildPlan
+    plan: BuildPlan | None
     events: tuple
     source_units: str
-    phase: str = "sliced"
+    source_name: str = "STL"
+    machine_build_volume_mm: dict[str, float] = field(default_factory=dict)
+    phase: str = "slicing"
+    machine_id: str = ""
+    material: str = "316L"
+    process: dict = field(default_factory=dict)
+    error: str | None = None
+    preview_toolpath: bytes | None = None
+    slicing_layer: int = 0
+    slicing_layer_count: int = 0
     thermal_cursor: int = 0
     agent_cursor: int = 0
     thermal_twin: FiPyThermalTwin | None = None
@@ -263,12 +280,26 @@ class BuildReplaySession:
     def status(self):
         event_count = len(self.events)
         thermal_count = self.thermal_cursor
+        conversion = self.plan.conversion if self.plan is not None else None
+        plan_vector_count = (
+            getattr(self.plan.cli_job, "source_segment_count", 0)
+            if self.plan is not None else 0
+        )
+        source_vector_count = (
+            plan_vector_count
+            if plan_vector_count
+            else len(self.events)
+        )
         return {
             "build_id": self.build_id,
             "status": self.phase,
             "phase": self.phase,
             "event_index": self.agent_cursor,
             "event_count": event_count,
+            "source_vector_count": source_vector_count,
+            "analysis_sampled": source_vector_count > event_count,
+            "source_name": self.source_name,
+            "machine_build_volume_mm": dict(self.machine_build_volume_mm),
             "thermal_event_index": self.thermal_cursor,
             "thermal_progress_pct": self.thermal_cursor / event_count * 100 if event_count else 0.0,
             "agent_progress_pct": self.agent_cursor / event_count * 100 if event_count else 0.0,
@@ -281,20 +312,32 @@ class BuildReplaySession:
                     if thermal_count else None
                 ),
             },
-            "layer_count": self.plan.cli_job.layer_count,
+            "layer_count": self.plan.cli_job.layer_count if self.plan is not None else None,
             "source_units": self.source_units,
             "dimensions_mm": {
-                "width": self.plan.conversion.build_width_mm,
-                "depth": self.plan.conversion.build_depth_mm,
-                "height": self.plan.conversion.build_height_mm,
-            },
+                "width": conversion.build_width_mm,
+                "depth": conversion.build_depth_mm,
+                "height": conversion.build_height_mm,
+            } if conversion is not None else None,
             "risk_counts": dict(self.risk_counts),
             "recommendation": self.recommendation,
+            "error": self.error,
+            "slicing_layer": self.slicing_layer,
+            "slicing_layer_count": self.slicing_layer_count,
+            "slicing_progress_pct": (
+                self.slicing_layer / self.slicing_layer_count * 100
+                if self.slicing_layer_count else 0.0
+            ),
+            "machine_id": self.machine_id,
+            "material": self.material,
+            "process": dict(self.process),
         }
 
     def ensure_thermal_twin(self):
         if self.thermal_twin is not None:
             return self.thermal_twin
+        if self.plan is None:
+            raise RuntimeError("STL slicing has not completed")
         conversion = self.plan.conversion
         if conversion is None:
             raise RuntimeError("STL conversion metadata is missing")
@@ -365,6 +408,7 @@ class BuildReplaySession:
 lt_predictor: V5StreamingLTPredictor | None = None
 active_build: BuildReplaySession | None = None
 approved_setpoints: dict[str, float] | None = None
+build_preparation_tasks: dict[str, asyncio.Task] = {}
 
 @app.get("/")
 async def index():
@@ -374,6 +418,7 @@ async def index():
 @app.get("/api/capabilities")
 async def get_capabilities():
     replay_count = len(getattr(lt_predictor, "replay_rows", ())) if lt_predictor else 0
+    machine = demo_316l_settings().machine
     return {
         "model": "Looped Transformer V5",
         "primary_data": "data/316L_meltpool.csv",
@@ -382,10 +427,157 @@ async def get_capabilities():
         "sensor_source": "not connected",
         "machine_actuation": False,
         "agent_loaded": lt_predictor is not None,
+        "preview_cli_available": PREVIEW_CLI_PATH.is_file(),
+        "preview_mesh_available": PREVIEW_STL_PATH.is_file(),
+        "preview_cli_size_bytes": PREVIEW_CLI_PATH.stat().st_size if PREVIEW_CLI_PATH.is_file() else 0,
+        "machine_build_volume_mm": {
+            "width": machine.build_width_mm,
+            "depth": machine.build_depth_mm,
+            "height": machine.build_height_mm,
+        },
     }
 
 
-@app.post("/api/builds")
+def _build_settings_for_next_job():
+    settings = demo_316l_settings()
+    if approved_setpoints is not None:
+        settings = replace(
+            settings,
+            process=replace(
+                settings.process,
+                laser_power_w=approved_setpoints["laser_power_w"],
+                scan_speed_mm_s=approved_setpoints["scan_speed_mm_s"],
+            ),
+        )
+    return settings
+
+
+def _create_uploaded_build(body: bytes, source_units: str, settings, progress_callback=None):
+    with tempfile.TemporaryDirectory(prefix="aero-twin-build-") as work_dir:
+        stl_path = Path(work_dir) / "upload.stl"
+        cli_path = Path(work_dir) / "build.cli"
+        stl_path.write_bytes(body)
+        plan = create_build_plan(
+            stl_path,
+            cli_path,
+            settings,
+            source_units=source_units,
+            slicing_progress=progress_callback,
+        )
+        events = tuple(plan.iter_events())
+    if len(events) > 100_000:
+        raise ValueError("STL creates more than 100,000 scan vectors")
+    if plan.conversion is None:
+        raise RuntimeError("STL conversion metadata is missing")
+    return plan, events
+
+
+async def _prepare_build_in_background(
+    session: BuildReplaySession,
+    body: bytes,
+    source_units: str,
+    settings,
+):
+    def report_progress(layer: int, layer_count: int):
+        if active_build is session:
+            session.slicing_layer = layer
+            session.slicing_layer_count = layer_count
+
+    try:
+        plan, events = await asyncio.to_thread(
+            _create_uploaded_build,
+            body,
+            source_units,
+            settings,
+            report_progress,
+        )
+    except (OSError, ValueError, RuntimeError) as exc:
+        if active_build is session:
+            session.phase = "slice_failed"
+            session.error = str(exc)
+    else:
+        if active_build is session:
+            session.plan = plan
+            session.events = events
+            session.phase = "sliced"
+    finally:
+        build_preparation_tasks.pop(session.build_id, None)
+
+
+def _build_preparation_finished(session: BuildReplaySession, task: asyncio.Task):
+    if task.cancelled():
+        if active_build is session:
+            session.phase = "slice_failed"
+            session.error = "STL slicing task was cancelled"
+        return
+    error = task.exception()
+    if error is not None:
+        logger.error(
+            "Unexpected STL preparation failure for build %s",
+            session.build_id,
+            exc_info=(type(error), error, error.__traceback__),
+        )
+        if active_build is session:
+            session.phase = "slice_failed"
+            session.error = f"Unexpected STL preparation failure: {error}"
+
+
+async def _prepare_preview_in_background(
+    session: BuildReplaySession,
+    settings,
+):
+    packed_path = array("h")
+
+    def collect_segment(segment):
+        packed_path.extend(
+            round(coordinate * 100)
+            for coordinate in (
+                segment.start_mm[0],
+                segment.start_mm[1],
+                segment.z_mm,
+                segment.end_mm[0],
+                segment.end_mm[1],
+                segment.z_mm,
+            )
+        )
+
+    try:
+        plan = await asyncio.to_thread(
+            load_cli_build_plan,
+            PREVIEW_CLI_PATH,
+            settings,
+            max_segments=MAX_ANALYSIS_VECTORS,
+            segment_callback=collect_segment,
+        )
+        events = tuple(plan.iter_events())
+        if packed_path.itemsize != 2:
+            raise RuntimeError("16-bit path preview encoding is not supported on this platform")
+        center_x, center_y = plan.cli_job.source_center_mm
+        center_x_ticks = round(center_x * 100)
+        center_y_ticks = round(center_y * 100)
+        for index in range(0, len(packed_path), 6):
+            packed_path[index] -= center_x_ticks
+            packed_path[index + 1] -= center_y_ticks
+            packed_path[index + 3] -= center_x_ticks
+            packed_path[index + 4] -= center_y_ticks
+        if sys.byteorder != "little":
+            packed_path.byteswap()
+        preview_toolpath = packed_path.tobytes()
+    except (OSError, OverflowError, ValueError, RuntimeError) as exc:
+        if active_build is session:
+            session.phase = "slice_failed"
+            session.error = str(exc)
+    else:
+        if active_build is session:
+            session.plan = plan
+            session.events = events
+            session.preview_toolpath = preview_toolpath
+            session.phase = "sliced"
+    finally:
+        build_preparation_tasks.pop(session.build_id, None)
+
+
+@app.post("/api/builds", status_code=status.HTTP_202_ACCEPTED)
 async def upload_build(request: Request, source_units: Literal["mm", "cm", "m", "in"] = "mm"):
     global active_build, lt_predictor
     body = await request.body()
@@ -394,58 +586,141 @@ async def upload_build(request: Request, source_units: Literal["mm", "cm", "m", 
     if len(body) > 15 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="STL upload limit is 15 MiB")
 
-    try:
-        with tempfile.TemporaryDirectory(prefix="aero-twin-build-") as work_dir:
-            stl_path = Path(work_dir) / "upload.stl"
-            cli_path = Path(work_dir) / "build.cli"
-            stl_path.write_bytes(body)
-            settings = demo_316l_settings()
-            if approved_setpoints is not None:
-                settings = replace(
-                    settings,
-                    process=replace(
-                        settings.process,
-                        laser_power_w=approved_setpoints["laser_power_w"],
-                        scan_speed_mm_s=approved_setpoints["scan_speed_mm_s"],
-                    ),
-                )
-            plan = create_build_plan(stl_path, cli_path, settings, source_units=source_units)
-            events = tuple(plan.iter_events())
-    except (OSError, ValueError, RuntimeError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    if len(events) > 100_000:
-        raise HTTPException(status_code=422, detail="STL creates more than 100,000 scan vectors")
-    if plan.conversion is None:
-        raise HTTPException(status_code=500, detail="STL conversion metadata is missing")
+    settings = _build_settings_for_next_job()
     active_build = BuildReplaySession(
         build_id=uuid4().hex,
-        plan=plan,
-        events=events,
+        plan=None,
+        events=(),
         source_units=source_units,
-    )
-    lt_predictor = None
-    return {
-        **active_build.status(),
-        "machine_id": settings.machine.machine_id,
-        "material": settings.material,
-        "process": {
+        source_name="STL upload",
+        machine_build_volume_mm={
+            "width": settings.machine.build_width_mm,
+            "depth": settings.machine.build_depth_mm,
+            "height": settings.machine.build_height_mm,
+        },
+        machine_id=settings.machine.machine_id,
+        material=settings.material,
+        process={
             "laser_power_w": settings.process.laser_power_w,
             "scan_speed_mm_s": settings.process.scan_speed_mm_s,
             "layer_thickness_um": settings.process.layer_thickness_um,
             "hatch_spacing_mm": settings.process.hatch_spacing_mm,
         },
+    )
+    lt_predictor = None
+    preparation_task = asyncio.create_task(
+        _prepare_build_in_background(active_build, body, source_units, settings)
+    )
+    build_preparation_tasks[active_build.build_id] = preparation_task
+    preparation_task.add_done_callback(
+        lambda task, session=active_build: _build_preparation_finished(session, task)
+    )
+    return {
+        **active_build.status(),
         "profile_origin": "illustrative 316L demo profile",
         "thermal_model": "FiPy reduced-order 2D heat equation",
         "approved_setpoints": approved_setpoints,
     }
 
 
+@app.post("/api/builds/preview", status_code=status.HTTP_202_ACCEPTED)
+async def start_preview_build():
+    global active_build, lt_predictor
+    if not PREVIEW_CLI_PATH.is_file():
+        raise HTTPException(status_code=404, detail="Bundled nozzle.preview.cli is not available")
+    settings = _build_settings_for_next_job()
+    active_build = BuildReplaySession(
+        build_id=uuid4().hex,
+        plan=None,
+        events=(),
+        source_units="mm",
+        source_name=PREVIEW_CLI_PATH.name,
+        machine_build_volume_mm={
+            "width": settings.machine.build_width_mm,
+            "depth": settings.machine.build_depth_mm,
+            "height": settings.machine.build_height_mm,
+        },
+        machine_id=settings.machine.machine_id,
+        material=settings.material,
+        process={
+            "laser_power_w": settings.process.laser_power_w,
+            "scan_speed_mm_s": settings.process.scan_speed_mm_s,
+            "layer_thickness_um": settings.process.layer_thickness_um,
+            "hatch_spacing_mm": settings.process.hatch_spacing_mm,
+        },
+    )
+    lt_predictor = None
+    preparation_task = asyncio.create_task(
+        _prepare_preview_in_background(active_build, settings)
+    )
+    build_preparation_tasks[active_build.build_id] = preparation_task
+    preparation_task.add_done_callback(
+        lambda task, session=active_build: _build_preparation_finished(session, task)
+    )
+    return {
+        **active_build.status(),
+        "preview_mesh_url": "/api/preview/nozzle.stl" if PREVIEW_STL_PATH.is_file() else None,
+        "profile_origin": "illustrative 316L demo profile",
+        "thermal_model": "FiPy reduced-order 2D heat equation",
+        "approved_setpoints": approved_setpoints,
+    }
+
+
+@app.get("/api/preview/nozzle.stl")
+async def get_preview_mesh():
+    if not PREVIEW_STL_PATH.is_file():
+        raise HTTPException(status_code=404, detail="Bundled nozzle.stl is not available")
+    return FileResponse(PREVIEW_STL_PATH, media_type="model/stl", filename=PREVIEW_STL_PATH.name)
+
+
 @app.get("/api/builds/{build_id}")
 async def get_build(build_id: str):
     if active_build is None or active_build.build_id != build_id:
         raise HTTPException(status_code=404, detail="Build job not found")
-    return {**active_build.status(), "last_result": active_build.last_result}
+    return {
+        **active_build.status(),
+        "last_result": active_build.last_result,
+        "profile_origin": "illustrative 316L demo profile",
+        "thermal_model": "FiPy reduced-order 2D heat equation",
+        "approved_setpoints": approved_setpoints,
+    }
+
+
+@app.get("/api/builds/{build_id}/toolpath")
+async def get_build_toolpath(build_id: str):
+    if active_build is None or active_build.build_id != build_id:
+        raise HTTPException(status_code=404, detail="Build job not found")
+    stride = max(1, math.ceil(len(active_build.events) / MAX_DISPLAY_VECTORS))
+    segments = [
+        {
+            "start_mm": list(event.start_mm),
+            "end_mm": list(event.end_mm),
+        }
+        for index, event in enumerate(active_build.events)
+        if index % stride == 0
+    ]
+    return {
+        "segments": segments,
+        "source_vector_count": active_build.status()["source_vector_count"],
+        "displayed_vector_count": len(segments),
+        "display_sampled": len(segments) < len(active_build.events),
+    }
+
+
+@app.get("/api/builds/{build_id}/toolpath/full")
+async def get_full_build_toolpath(build_id: str):
+    if active_build is None or active_build.build_id != build_id:
+        raise HTTPException(status_code=404, detail="Build job not found")
+    if active_build.phase != "sliced" or active_build.preview_toolpath is None:
+        raise HTTPException(status_code=409, detail="Full bundled toolpath is not ready")
+    return Response(
+        content=active_build.preview_toolpath,
+        media_type="application/octet-stream",
+        headers={
+            "X-Vector-Count": str(len(active_build.preview_toolpath) // 12),
+            "X-Coordinate-Scale": "0.01",
+        },
+    )
 
 
 @app.post("/api/builds/{build_id}/thermal-step")

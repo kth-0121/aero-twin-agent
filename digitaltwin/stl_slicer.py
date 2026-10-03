@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from math import ceil, isfinite
 from pathlib import Path
+from typing import Callable
 
 from .cli_toolpath import LayerPaths, write_cli
 
@@ -32,37 +33,40 @@ def _line_parts(geometry):
 
 
 def _hatch_polygon(polygon, spacing_mm: float, angle_degrees: float):
-    from shapely.affinity import rotate
     from shapely.geometry import LineString
 
-    rotated = rotate(polygon, angle_degrees, origin=(0.0, 0.0), use_radians=False)
-    min_x, min_y, max_x, max_y = rotated.bounds
-    first_y = min_y + spacing_mm / 2
-    scan_count = max(0, int(ceil((max_y - first_y) / spacing_mm)))
+    min_x, min_y, max_x, max_y = polygon.bounds
+    vertical = angle_degrees % 180 == 90
+    scan_min, scan_max = (min_x, max_x) if vertical else (min_y, max_y)
+    first_scan = scan_min + spacing_mm / 2
+    scan_count = max(0, int(ceil((scan_max - first_scan) / spacing_mm)))
     hatches = []
     for scan_index in range(scan_count):
-        y = first_y + scan_index * spacing_mm
-        intersections = _line_parts(
-            rotated.intersection(LineString(((min_x - spacing_mm, y), (max_x + spacing_mm, y))))
-        )
-        intersections.sort(key=lambda line: line.bounds[0])
-        if scan_index % 2:
+        scan_position = first_scan + scan_index * spacing_mm
+        if vertical:
+            cutter = LineString(
+                ((scan_position, min_y - spacing_mm), (scan_position, max_y + spacing_mm))
+            )
+            intersections = _line_parts(polygon.intersection(cutter))
+            intersections.sort(key=lambda line: line.bounds[1], reverse=scan_index % 2 == 0)
+        else:
+            cutter = LineString(
+                ((min_x - spacing_mm, scan_position), (max_x + spacing_mm, scan_position))
+            )
+            intersections = _line_parts(polygon.intersection(cutter))
+            intersections.sort(key=lambda line: line.bounds[0])
+        if scan_index % 2 and not vertical:
             intersections.reverse()
         for line in intersections:
             coordinates = list(line.coords)
-            start = coordinates[0]
-            end = coordinates[-1]
-            if scan_index % 2:
+            if vertical and scan_index % 2 == 0:
+                start, end = coordinates[-1], coordinates[0]
+            else:
+                start, end = coordinates[0], coordinates[-1]
+            if scan_index % 2 and not vertical:
                 start, end = end, start
-            unrotated = rotate(
-                LineString((start, end)),
-                -angle_degrees,
-                origin=(0.0, 0.0),
-                use_radians=False,
-            )
-            points = list(unrotated.coords)
-            if points[0] != points[-1]:
-                hatches.append((tuple(points[0]), tuple(points[-1])))
+            if start != end:
+                hatches.append((tuple(start), tuple(end)))
     return hatches
 
 
@@ -74,6 +78,7 @@ def slice_stl_to_cli(
     hatch_spacing_mm: float,
     source_units: str = "mm",
     label: str = "AERO-TWIN-316L-DEMO",
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> STLConversionResult:
     """Slice a closed STL along +Z and generate alternating raster hatch paths.
 
@@ -117,6 +122,8 @@ def slice_stl_to_cli(
     height_mm = float(dimensions[2])
     layer_thickness_mm = layer_thickness_um / 1000.0
     layer_count = max(1, int(ceil(height_mm / layer_thickness_mm)))
+    if progress_callback is not None:
+        progress_callback(0, layer_count)
     layers = []
     vector_count = 0
     for layer_index in range(layer_count):
@@ -129,6 +136,8 @@ def slice_stl_to_cli(
             plane_normal=(0.0, 0.0, 1.0),
         )
         if section is None:
+            if progress_callback is not None:
+                progress_callback(layer_index + 1, layer_count)
             continue
 
         contours = []
@@ -147,6 +156,8 @@ def slice_stl_to_cli(
             contours.append(tuple(coordinates))
             polygonal_regions.append(polygon)
         if not polygonal_regions:
+            if progress_callback is not None:
+                progress_callback(layer_index + 1, layer_count)
             continue
 
         # Even-odd composition preserves holes represented by nested mesh loops.
@@ -167,6 +178,8 @@ def slice_stl_to_cli(
                 hatches=tuple(hatches),
             )
         )
+        if progress_callback is not None:
+            progress_callback(layer_index + 1, layer_count)
 
     if not layers:
         raise ValueError("STL produced no closed contours at the requested layer thickness")
