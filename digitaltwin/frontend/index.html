@@ -135,6 +135,7 @@
       .job-meta { flex-direction: column; gap: 4px; }
     }
   </style>
+  <link rel="stylesheet" href="/static/decision_panel.css" />
 </head>
 <body>
   <header class="topbar">
@@ -267,6 +268,8 @@
       </aside>
     </section>
 
+    <div id="decision-panel"></div>
+
     <section class="card" style="margin-top:12px">
       <div class="card-head"><span class="card-title">운영 이벤트</span><span class="card-subtitle">현재 작업 기록</span></div>
       <div id="event-list" class="events" aria-live="polite">
@@ -276,6 +279,7 @@
 
     <div class="footer-note">실장비 센서·제어기 미연결. 열해석은 FiPy 기반 정성적 2D 모델이며, 센서값·품질보증·실제 장비 동작을 의미하지 않습니다. 권고 승인 시 값은 다음 가상 작업에만 적용됩니다.</div>
   </main>
+  <script src="/static/decision_panel.js"></script>
 
   <script type="importmap">
     { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js" } }

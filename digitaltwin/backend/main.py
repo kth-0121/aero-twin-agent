@@ -19,10 +19,12 @@ from ..fipy_dt import FiPyThermalTwin
 from ..process import demo_316l_settings
 from .lt_contracts import GeometryPredictor, LTRequest
 from .lt_predictor import V5StreamingLTPredictor
-from sim.decision import recommend_action_from_prediction
+from sim.decision import find_safe_conditions, recommend_action_from_prediction
 from sim.lpbf import evaluate_physical_state
+from .decision_api import router as decision_router  # 판단/행동/Agent API
 
 app = FastAPI(title="Physical AI Digital Twin")
+app.include_router(decision_router)
 FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
@@ -348,6 +350,19 @@ class BuildReplaySession:
             (action, power, speed), vote = selected
             resolved_count = int(vote["resolved"])
             supporting_vectors = int(vote["count"])
+        search = None
+        risky = self.risk_counts["lof_risk"] + self.risk_counts["keyhole_risk"] > 0
+        if risky and resolved_count == 0:
+            # 후보 투표로 해소되는 행동이 없으면 학습 범위 안 (출력, 속도) 격자에서 최소 변경 안전 조건을 탐색
+            first = self.events[0].process
+            found = find_safe_conditions(
+                first["laser_power_w"], first["scan_speed_mm_s"], first["spot_diameter_mm"] * 1000,
+                first["hatch_spacing_mm"] * 1000, first["layer_thickness_um"], backend="v5",
+            )
+            if found:
+                action, power, speed = "안전 조건으로 재설정 (출력·속도 동시 조정)", found["power_w"], found["speed_mm_s"]
+                search = {**found, "range": "학습 데이터 범위 안 격자 탐색", "verified_by": "LT V5 정상상태 재검증"}
+                resolved_count = supporting_vectors
         self.recommendation = {
             "action": action,
             "laser_power_w": round(power, 1),
@@ -358,6 +373,7 @@ class BuildReplaySession:
             "predicted_direction": direction,
             "direction_basis": f"최근 {recent_window}개 벡터와 직전 {recent_window}개의 물리 위험 비율 비교",
             "model_boundary": "LT 형상 예측 + Rosenthal ROM 행동 검증; 장비 실측/품질 보증 아님",
+            "safe_condition_search": search,
         }
         self.phase = "review"
 

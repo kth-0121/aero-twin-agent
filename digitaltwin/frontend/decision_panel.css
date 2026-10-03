@@ -1,0 +1,31 @@
+/* 의사결정 지원 패널 — index.html의 디자인 변수(--blue, --line 등)와 .card 계열 클래스를 그대로 사용 */
+#decision-panel { margin-top: 12px; display: grid; gap: 12px; }
+.dp-body { display: grid; grid-template-columns: 300px minmax(0, 1fr); }
+.dp-controls { padding: 12px; border-right: 1px solid var(--line); display: grid; gap: 10px; align-content: start; }
+.dp-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.dp-presets button { min-height: 27px; padding: 0 9px; font-size: 11px; }
+.dp-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+.dp-field { display: grid; gap: 3px; }
+.dp-field label { color: var(--muted); font-size: 10px; }
+.dp-field input { height: 29px; padding: 0 7px; border: 1px solid #b9c1ca; border-radius: 2px; background: #fff; color: var(--ink); font-variant-numeric: tabular-nums; }
+.dp-field.wide { grid-column: 1 / -1; }
+.dp-results { min-width: 0; }
+.dp-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 12px; min-height: 39px; border-bottom: 1px solid var(--line); }
+.dp-summary strong { font-size: 13px; }
+.dp-note { margin: 0; padding: 8px 12px; color: var(--muted); font-size: 10px; line-height: 1.5; border-bottom: 1px solid #e7e9ec; }
+.dp-warn { margin: 0; padding: 8px 12px; border-left: 3px solid var(--red); background: #fff6f7; color: #7a1d2d; font-size: 11px; line-height: 1.45; }
+.dp-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.dp-table th { padding: 7px 10px; border-bottom: 1px solid var(--line); background: #f7f8fa; color: var(--muted); font-size: 10px; font-weight: 600; text-align: left; }
+.dp-table td { padding: 8px 10px; border-bottom: 1px solid #e7e9ec; font-variant-numeric: tabular-nums; }
+.dp-table tr.best td { background: #f1f6fd; font-weight: 700; }
+.dp-table .ok { color: var(--green); font-weight: 700; }
+.dp-table .no { color: var(--red); font-weight: 700; }
+.dp-empty { padding: 22px 12px; color: var(--muted); font-size: 11px; text-align: center; }
+.dp-ask { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 11px 12px; }
+.dp-ask input { height: 31px; padding: 0 9px; border: 1px solid #b9c1ca; border-radius: 2px; background: #fff; color: var(--ink); }
+.dp-answer { margin: 0 12px 12px; padding: 10px 12px; border: 1px solid var(--line); background: #f7f8fa; font-size: 12px; line-height: 1.6; white-space: pre-wrap; }
+.dp-answer.err { border-color: #e6a1af; background: #fff6f7; color: #7a1d2d; }
+@media (max-width: 900px) {
+  .dp-body { grid-template-columns: 1fr; }
+  .dp-controls { border-right: 0; border-bottom: 1px solid var(--line); }
+}

@@ -54,7 +54,9 @@ def area_energy_density(power_w, speed_m_s, spot_diameter_m):
 
 
 AREA_ENERGY_KEYHOLE_THRESHOLD = 4.4e6  # J/m^2, calibrated against data/316L_meltpool.csv
-NORMALIZED_ENTHALPY_THRESHOLD = 14.0  # Demonstration boundary; validate with AM-Bench data
+# 316L 실측(677행)에서 D/W >= 0.5 를 keyhole/transition 으로 본 분류 정확도: H*>=14.0 -> 77.8%(keyhole 재현율 65%),
+# H*>=11.5 -> 83.5%(10~12 구간 82~83%). 같은 데이터로 맞춘 값(in-sample)이라 독립 데이터 검증은 아직 없음.
+NORMALIZED_ENTHALPY_THRESHOLD = 11.5
 DATASET_ABSORPTIVITY = 0.34
 
 
