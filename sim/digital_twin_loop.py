@@ -1,12 +1,12 @@
-"""STL/CLI 빌드 이벤트 -> 판단 -> 행동결정 루프 (태훈 담당: Physics & Digital Twin Lead).
+"""STL/CLI 빌드 이벤트 -> 판단 -> 행동결정 루프.
 
-기준님의 digitaltwin/ pre-LT 파이프라인(STL -> 슬라이싱 -> 공정이벤트 -> FiPy/PyBullet)은
-본인이 README에 명시한 대로 "deliberately has no LT call"로 끝난다. 이 모듈이 그
+digitaltwin/ pre-LT 파이프라인(STL -> 슬라이싱 -> 공정이벤트 -> FiPy/PyBullet)은
+README에 명시된 대로 "deliberately has no LT call"로 끝난다. 이 모듈이 그
 빈 칸을 메운다: BuildEvent 하나하나를 sim.decision(LT v3 기반 상태판단+행동추천)에
 흘려서, "STL 업로드 -> Agent 처리 -> 판단 -> 장비제어명령" 루프의 "판단" 단계를 구현.
 
 digitaltwin.build_job/cli_toolpath/process만 쓰고 trimesh/fipy/pybullet 의존이
-없다 -- 그건 기준님의 시각화·열해석 레이어라 여기(판단 단계)에는 필요 없음.
+없다 -- 그건 시각화·열해석 레이어라 여기(판단 단계)에는 필요 없음.
 """
 from digitaltwin.build_job import BuildEvent, BuildPlan, load_cli_build_plan
 

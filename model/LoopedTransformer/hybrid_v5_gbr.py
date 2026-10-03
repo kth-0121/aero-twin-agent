@@ -1,6 +1,6 @@
 """
 v5 LoopedTransformer + GradientBoosting 평균 앙상블.
-~/buruG/aero-twin-agent 저장소 루트에서 실행 (기준님 model/LoopedTransformer 코드 재사용).
+~/buruG/aero-twin-agent 저장소 루트에서 실행 (model/LoopedTransformer 코드 재사용).
 
 사용법: python hybrid_v5_gbr.py
 """

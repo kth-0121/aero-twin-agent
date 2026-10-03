@@ -1,16 +1,16 @@
-"""공정 상태별 판단 + 행동 결정 (태훈 담당: Physics & Digital Twin Lead).
+"""공정 상태별 판단 + 행동 결정.
 
 현재 공정 조건을 평가해서 상태(정상/LOF위험/Keyhole위험)를 판단하고, 위험
 유형에 맞는 행동 후보를 생성한 뒤, 각 후보를 가상 검증해서 최선의 행동을
 추천한다. 개발계획서 "나.개발방법" 문단의 행동결정 예시
 (LOF 위험->파워 증가/속도 감소, Keyhole 위험->파워 감소/속도 증가) 그대로.
 
-폭/깊이 예측은 기준님의 공식 Looped Transformer(v3, model/LoopedTransformer/legacy/)를
+폭/깊이 예측은 공식 Looped Transformer(v3, model/LoopedTransformer/legacy/)를
 우선 사용한다 (digitaltwin/looped_transformer_integration.md 데이터 계약 참고).
 체크포인트가 없거나 로드에 실패하면 ROM(sim.lpbf)으로 자동 폴백한다 -- LOF
 판정·regime 분류 자체는 폭/깊이 소스와 무관하게 항상 ROM의 공식을 그대로 쓴다.
 
-2026-10-03: 기준님이 model/LoopedTransformer/를 리팩토링하면서 dataLT·interfaceLT·
+2026-10-03: model/LoopedTransformer/ 리팩토링으로 dataLT·interfaceLT·
 modelLT·physicsLT·v3 체크포인트를 legacy/ 하위로 옮김 (새 model/LoopedTransformer/v5/
 패키지는 실시간 스트림용 StreamingLTService라 이 모듈의 단발 호출 용도와는 다름).
 그래서 legacy 경로 + 절대 패키지 import로 맞춤.

@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .lt_contracts import GeometryPredictor
 from .lt_predictor import V5StreamingLTPredictor
-from .decision_api import router as decision_router  # 태훈: 판단/행동/Agent API + /decision 페이지
+from .decision_api import router as decision_router  # 판단/행동/Agent API + /decision 페이지
 
 app = FastAPI(title="Physical AI Digital Twin")
 app.include_router(decision_router)

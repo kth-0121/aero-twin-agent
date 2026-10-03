@@ -1,6 +1,6 @@
-"""의사결정 지원 API (태훈 담당: 판단·행동결정·가상검증·Agent).
+"""의사결정 지원 API (판단·행동결정·가상검증·Agent).
 
-DT 콘솔(main.py)에 router 한 줄로 붙는다. 기준님 파일은 건드리지 않고 이 파일에서만:
+DT 콘솔(main.py)에 router 한 줄로 붙는다. 기존 콘솔 코드는 건드리지 않고 이 파일에서만:
   POST /api/assess     공정조건 -> 상태판단 (LT 예측 + LOF/regime), 학습범위 밖 경고
   POST /api/recommend  상태판단 + 행동 후보 생성 + 후보별 재검증
   POST /api/agent      로컬 sLLM Agent 질의 (Ollama 없으면 503)
