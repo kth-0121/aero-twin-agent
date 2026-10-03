@@ -22,9 +22,29 @@ def _client():
     return TestClient(app)
 
 
+class V5Backend(unittest.TestCase):
+    def test_v5_is_deterministic_and_batchable(self):
+        from sim.v5_condition_model import V5ConditionModel
+
+        m = V5ConditionModel()
+        a = m.predict([250.0, 250.0], [800.0, 800.0], 0.1, 30.0)
+        self.assertTrue((a[:, 0] == a[:, 1]).all())          # 같은 입력 -> 같은 출력 (난수 센서 제거)
+        self.assertTrue((a > 0).all())
+
+    def test_v5_backend_labels_source_and_resolves_risk(self):
+        original = decision.MODEL_BACKEND
+        decision.MODEL_BACKEND = "v5"
+        try:
+            r = recommend_action(80, 1500)
+            self.assertEqual(r["current_state"]["source"], "lt_v5")
+            self.assertTrue(any(c["resolved"] for c in r["candidates_evaluated"]))
+        finally:
+            decision.MODEL_BACKEND = original
+
+
 class DecisionScenarios(unittest.TestCase):
     def test_normal_keeps_process(self):
-        r = recommend_action(200, 800)
+        r = recommend_action(250, 800)
         self.assertEqual(r["current_state"]["status"], "normal")
         self.assertEqual(r["recommended_action"], "공정 유지")
         self.assertEqual(r["candidates_evaluated"], [])
@@ -53,14 +73,14 @@ class DecisionScenarios(unittest.TestCase):
         self.assertNotEqual(a, b)
 
     def test_rom_fallback_when_lt_unavailable(self):
-        original = decision._LT_AVAILABLE
-        decision._LT_AVAILABLE = False
+        original = (decision._LT_AVAILABLE, decision.MODEL_BACKEND)
+        decision._LT_AVAILABLE, decision.MODEL_BACKEND = False, "v3"   # v5 경로도 꺼야 ROM까지 내려감
         try:
-            s = assess_state(200, 800)
+            s = assess_state(250, 800)
             self.assertEqual(s["source"], "rom_fallback")
             self.assertIn(s["status"], {"normal", "lof_risk", "keyhole_risk"})
         finally:
-            decision._LT_AVAILABLE = original
+            decision._LT_AVAILABLE, decision.MODEL_BACKEND = original
 
     def test_monotonic_power_depth(self):
         import numpy as np
@@ -76,7 +96,7 @@ class Api(unittest.TestCase):
         cls.client = _client()
 
     def test_assess_and_model_provenance(self):
-        out = self.client.post("/api/assess", json={"power_w": 200, "speed_mm_s": 800}).json()
+        out = self.client.post("/api/assess", json={"power_w": 250, "speed_mm_s": 800}).json()
         self.assertEqual(out["state"]["status"], "normal")
         self.assertIn("Looped Transformer", out["prediction_model"])
         self.assertIn("미제공", out["uncertainty"])
@@ -123,7 +143,7 @@ class DigitalTwinEvents(unittest.TestCase):
             write_cli(cli, [LayerPaths(0, 0.03, (), (((0.0, 0.0), (5.0, 0.0)), ((0.0, 0.1), (5.0, 0.1))))])
             results = list(run_decision_loop(load_cli_build_plan(cli, demo_316l_settings())))
         self.assertEqual(len(results), 2)
-        self.assertTrue(all(r["current_state"]["source"] in {"lt_v3", "rom_fallback"} for r in results))
+        self.assertTrue(all(r["current_state"]["source"] in {"lt_v3", "lt_v5", "rom_fallback"} for r in results))
 
 
 if __name__ == "__main__":

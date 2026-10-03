@@ -29,7 +29,7 @@ router = APIRouter()
 _PAGE = Path(__file__).resolve().parents[1] / "frontend" / "decision.html"
 
 SCENARIOS = [
-    {"id": "normal", "label": "정상 조건", "power_w": 200, "speed_mm_s": 800},
+    {"id": "normal", "label": "정상 조건 (라이브와 동일)", "power_w": 250, "speed_mm_s": 800},
     {"id": "lof", "label": "LOF 위험 (저출력·고속)", "power_w": 80, "speed_mm_s": 1500},
     {"id": "keyhole", "label": "Keyhole 위험 (고출력·저속)", "power_w": 450, "speed_mm_s": 300},
 ]
@@ -69,9 +69,12 @@ def _range_warnings(c: Condition) -> list[str]:
 
 
 def _model_info(state: dict) -> dict:
-    lt = state.get("source") == "lt_v3"
+    names = {
+        "lt_v3": "Looped Transformer v3 (공식)",
+        "lt_v5": "Looped Transformer V5 (스트리밍, 정상상태 평가 모드)",
+    }
     return {
-        "prediction_model": "Looped Transformer v3 (공식)" if lt else "Rosenthal ROM (LT 로드 실패 폴백)",
+        "prediction_model": names.get(state.get("source"), "Rosenthal ROM (LT 로드 실패 폴백)"),
         "uncertainty": "미제공 -- 점추정이며 안전 보장이 아님",
     }
 

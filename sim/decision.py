@@ -56,8 +56,31 @@ def _lt_predict_width_depth(power_w, speed_mm_s, spot_diameter_um, layer_thickne
     return width_um * 1e-6, pred["aspect_ratio"].to_numpy(float) * width_um * 1e-6
 
 
+# 판단에 쓸 예측 모델: "v3"(공식 legacy LT, 기본) | "v5"(스트리밍 LT의 정상상태 평가 모드).
+# 최종 모델 확정 시 이 값(또는 환경변수 DECISION_MODEL)만 바꾸면 된다. 실패하면 v3 -> ROM 순으로 폴백.
+MODEL_BACKEND = os.environ.get("DECISION_MODEL", "v3")
+_v5_model = None
+
+
+def _v5_predict_width_depth(power_w, speed_mm_s, spot_diameter_um, layer_thickness_um):
+    """V5를 서비스(이력·SQLite·난수 센서) 없이 정상상태로 배치 평가. (width_m, depth_m)."""
+    global _v5_model
+    if _v5_model is None:
+        from sim.v5_condition_model import V5ConditionModel
+
+        _v5_model = V5ConditionModel()
+    w_um, d_um, _ = _v5_model.predict(power_w, speed_mm_s, spot_diameter_um / 1000.0, layer_thickness_um)
+    return w_um * 1e-6, d_um * 1e-6
+
+
 def _predict_width_depth(power_w, speed_mm_s, spot_diameter_um, layer_thickness_um):
-    """LT(v3) 우선, 실패 시 ROM 폴백. (width_m, depth_m, source) -- 입력이 배열이어도 동작."""
+    """선택된 LT 우선, 실패 시 v3 -> ROM 폴백. (width_m, depth_m, source) -- 입력이 배열이어도 동작."""
+    if MODEL_BACKEND == "v5":
+        try:
+            w, d = _v5_predict_width_depth(power_w, speed_mm_s, spot_diameter_um, layer_thickness_um)
+            return w, d, "lt_v5"
+        except Exception:
+            pass
     if _LT_AVAILABLE:
         try:
             w, d = _lt_predict_width_depth(power_w, speed_mm_s, spot_diameter_um, layer_thickness_um)
