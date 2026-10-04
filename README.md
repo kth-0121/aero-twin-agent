@@ -47,8 +47,7 @@ pip install -r requirements.txt
 2. `ollama pull qwen2.5:7b`
 3. 설치하면 서버가 자동 실행됩니다. 안 떠 있으면 `ollama serve`
 
-**경상국립대 AI 데이터센터 GPU 서버**(H200, 팀 계정 공유)도 사용 가능 — `ssh -p 26917 team21@203.230.214.11`,
-Conda `edu` 환경(`/opt/anaconda3/envs/edu`) 제공. VS Code Remote-SSH로 접속.
+경상국립대 AI 데이터센터 GPU 서버(H200)도 사용할 수 있다. 접속 정보는 팀 내부에서만 공유한다.
 
 ## 실행 전 환경변수 (매 터미널 세션마다)
 
