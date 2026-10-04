@@ -43,7 +43,7 @@
   const summary = el('div', { className: 'dp-summary' }, el('strong', { textContent: '조건을 선택하고 실행하세요' }));
   const facts = el('div', { className: 'result-list' });
   const notes = el('div');
-  const table = el('div', { className: 'dp-empty', textContent: '위험 상태일 때 행동 후보와 재검증 결과가 표시됩니다.' });
+  let table = el('div', { className: 'dp-empty', textContent: '위험 상태일 때 행동 후보와 재검증 결과가 표시됩니다.' });
   const results = el('div', { className: 'dp-results' }, summary, facts, notes, table);
 
   mount.append(
