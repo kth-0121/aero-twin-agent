@@ -17,8 +17,9 @@ import torch
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
-LT_DIR = os.path.join(os.path.dirname(__file__), "model", "LoopedTransformer")
-sys.path.insert(0, LT_DIR)
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+LT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(LT_DIR, "legacy"))
 import dataLT
 import lossLT
 import modelLT
@@ -136,7 +137,7 @@ def rmse(a, b):
 
 
 def main():
-    df = dataLT.load_316l_csv(os.path.join(os.path.dirname(__file__), "data", "316L_meltpool.csv"))
+    df = dataLT.load_316l_csv(os.path.join(ROOT_DIR, "data", "316L_meltpool.csv"))
     v_m_s = df["v_scan"] / 1000.0
     d_m = df["d_laser"] / 1000.0
     ed = df["P_laser"] / (v_m_s * d_m)

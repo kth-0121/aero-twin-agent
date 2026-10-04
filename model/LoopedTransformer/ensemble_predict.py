@@ -3,7 +3,7 @@ looped_transformer_*_ensemble10.pt (10-seed 앙상블 체크포인트) 로더 + 
 
 사용법:
     from ensemble_predict import load_ensemble, predict_ensemble
-    bundle = load_ensemble("model/LoopedTransformer/looped_transformer_v8_ensemble10.pt",
+    bundle = load_ensemble("model/LoopedTransformer/looped_transformer_v9_ensemble10.pt",
                             evaluator_cls=KeyholeAwarePhysicsEvaluator)
     pred = predict_ensemble(bundle, feat_df)  # (n, 3) numpy array, 10개 모델 평균
 """
@@ -13,7 +13,7 @@ import sys
 import numpy as np
 import torch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "model", "LoopedTransformer"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "legacy"))
 import modelLT
 
 

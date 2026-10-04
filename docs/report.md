@@ -77,4 +77,4 @@ AI Agent (로컬 sLLM qwen2.5:7b) ── Tool Call ──▶ predict_melt_pool /
 | 발표자료 | ⬜ |
 
 ### 9. 저장소
-https://github.com/kth-0121/aero-twin-agent (Private)
+https://github.com/kth-0121/aero-twin-agent

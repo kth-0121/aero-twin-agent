@@ -1,6 +1,6 @@
 """
 v5 LoopedTransformer + GradientBoosting 평균 앙상블.
-~/buruG/aero-twin-agent 저장소 루트에서 실행 (model/LoopedTransformer 코드 재사용).
+저장소 루트에서 실행 (model/LoopedTransformer 코드 재사용).
 
 사용법: python hybrid_v5_gbr.py
 """
@@ -15,13 +15,14 @@ from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import mean_squared_error
 from sklearn.multioutput import MultiOutputRegressor
 
-LT_DIR = os.path.join(os.path.dirname(__file__), "model", "LoopedTransformer")
-sys.path.insert(0, LT_DIR)
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+LT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(LT_DIR, "legacy"))
 import dataLT  # noqa: E402
 import modelLT  # noqa: E402
 import physicsLT  # noqa: E402
 
-DATA_CSV = os.path.join(os.path.dirname(__file__), "data", "316L_meltpool.csv")
+DATA_CSV = os.path.join(ROOT_DIR, "data", "316L_meltpool.csv")
 V5_CHECKPOINT = os.path.join(LT_DIR, "looped_transformer_v5.pt")
 GBR_MODEL_PATH = os.path.join(LT_DIR, "gbr_hybrid.pkl")
 
