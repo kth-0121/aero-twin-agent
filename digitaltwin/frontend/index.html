@@ -624,7 +624,7 @@
       if (data.phase === 'review' && data.recommendation) {
         const rec = data.recommendation;
         setText('recommendation-action', rec.action);
-        setText('recommendation-detail', `${rec.predicted_direction === 'risk_increasing' ? '위험 증가 경향' : rec.predicted_direction === 'risk_decreasing' ? '위험 감소 경향' : rec.predicted_direction === 'stable' ? '위험 안정 경향' : '추세 판단 자료 부족'} · 전체 ${data.agent_cursor.toLocaleString()}개 벡터 중 ${rec.supporting_vectors}개에서 후보 선택`);
+        setText('recommendation-detail', `${rec.predicted_direction === 'risk_increasing' ? '위험 증가 경향' : rec.predicted_direction === 'risk_decreasing' ? '위험 감소 경향' : rec.predicted_direction === 'stable' ? '위험 안정 경향' : '추세 판단 자료 부족'} · 전체 ${data.event_index.toLocaleString()}개 벡터 중 ${rec.supporting_vectors}개에서 후보 선택`);
         setText('recommended-power', `${rec.laser_power_w.toFixed(1)} W`);
         setText('recommended-speed', `${rec.scan_speed_mm_s.toFixed(1)} mm/s`);
         byId('approve-button').disabled = false;
