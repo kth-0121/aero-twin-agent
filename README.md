@@ -115,6 +115,36 @@ streamlit run app.py
 
 ---
 
+## 대표 테스트 5건 실행
+
+기술설명서의 '대표 테스트 5건 결과'를 같은 번호로 재현합니다. 저장소 루트에서 실행합니다.
+
+```powershell
+# 1~4번 (약 1분)
+python -m sim.representative_cases
+
+# 1~5번 (5번은 FiPy 열해석 포함, 수십 분 소요)
+python -m sim.representative_cases --stl
+```
+
+| # | 케이스 | 입력 | 기대 결과 |
+|---|---|---|---|
+| 1 | 정상 조건 | 250W / 800mm/s | 정상(LOF 0.687), 공정 유지 |
+| 2 | LOF 위험 | 80W / 1500mm/s | LOF 위험(2.4) → 100W / 350mm/s 재설정, 재검증 정상(0.943) |
+| 3 | keyhole 위험 | 450W / 300mm/s | keyhole 위험 → 220W / 350mm/s 재설정, 재검증 정상(0.308) |
+| 4 | 무작위 120조건 | 학습 범위 안 무작위 | 위험 조건 전부 해소, 재검증 일치 100% |
+| 5 | STL 전체 흐름 | `digitaltwin/demo_model/demo_ring.stl` | 등록·슬라이싱 → 열해석 → AI 분석 → 권고 → 승인 |
+
+각 케이스는 `[PASS]`/`[FAIL]`로 출력됩니다. 재검증은 같은 예측 모델로 다시 판정하는 것이라 독립 검증이 아닙니다.
+
+자동 테스트 전체:
+
+```powershell
+python -m unittest sim.test_e2e digitaltwin.test_backend_controls digitaltwin.test_build_workflow digitaltwin.test_lt_adapter
+```
+
+---
+
 ## 서비스 실행 (APP)
 
 FastAPI 기반의 연결형 LPBF 콘솔 서버를 실행합니다.

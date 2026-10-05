@@ -5,7 +5,7 @@ MDPI Applied Sci 2025 "Physics-Based Data Augmentation..." (316L, 36개 실측�
 
 conduction만 학습(기존 도메인시프트 설정과 동일) + 합성 keyhole 행 추가 -> 실측
 keyhole 325행으로 평가. plain(증강 없음) vs v9(증강)을 10-seed로 공정 비교.
-실행 위치: ~/buruG/aero-twin-agent (GPU)
+실행 위치: 저장소 루트 (GPU 권장)
 """
 import os
 import sys

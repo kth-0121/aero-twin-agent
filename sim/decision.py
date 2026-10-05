@@ -289,7 +289,7 @@ def demo():
     assert any(c["resolved"] for c in keyhole_case["candidates_evaluated"]), "keyhole 위험도 해소 조건을 찾아야 함"
     print(f"demo ok (keyhole): {keyhole_case['recommended_action']} - {keyhole_case['reason']}")
 
-    normal_case = recommend_action(power_w=500, speed_mm_s=1583.6)
+    normal_case = recommend_action(power_w=250, speed_mm_s=800)
     assert normal_case["current_state"]["status"] == "normal", normal_case
     print(f"demo ok (정상조건): status={normal_case['current_state']['status']}, "
           f"action={normal_case['recommended_action']}")
