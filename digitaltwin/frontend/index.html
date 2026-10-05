@@ -667,7 +667,9 @@
       const width = size.x * unitsScale;
       const depth = size.y * unitsScale;
       const height = size.z * unitsScale;
-      worldScale = 1.48 / Math.max(width, depth);
+      const plateFitScale = 1.48 / Math.max(width, depth);
+      const chamberFitScale = 1.04 / height;
+      worldScale = Math.min(plateFitScale, chamberFitScale);
       geometry.applyMatrix4(new THREE.Matrix4().set(
         worldScale * unitsScale, 0, 0, -center.x * worldScale * unitsScale,
         0, 0, worldScale * unitsScale, 1.18 - bounds.min.z * worldScale * unitsScale,
