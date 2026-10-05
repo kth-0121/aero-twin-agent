@@ -4,9 +4,10 @@ __pycache__/
 venv/
 .env
 .streamlit/
-digitaltwin/nozzle.preview.cli
+digitaltwin/nozzle.preview
 
 # DT 서버 실행 시 생성되는 이벤트 DB
 *.sqlite
 *.sqlite-journal
-digitaltwin/nozzle.preview.cli
+*.cli
+digitaltwin/demo_model/nozzle.preview.cli
