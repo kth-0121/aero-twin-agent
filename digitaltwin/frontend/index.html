@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LPBF Process Supervision</title>
+  <title>금속 프린팅 MES</title>
   <style>
     :root {
       color-scheme: light;
@@ -110,6 +110,7 @@
     .event strong { display: block; font-size: 10px; }
     .event span { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
     .footer-note { margin-top: 12px; padding: 8px 10px; border-left: 3px solid var(--red); background: #fff; color: var(--muted); font-size: 10px; line-height: 1.45; }
+    .footer-bar { margin-top: 12px; padding: 8px 10px; border-left: 3px; background: #fff; color: var(--muted); font-size: 10px; line-height: 1.45; }
     @media (max-width: 900px) {
       .main-grid { grid-template-columns: 1fr; }
       .side-stack { grid-template-columns: 1fr 1fr; }
@@ -139,63 +140,63 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="wordmark">AERO</div>
-    <div class="product-name">LPBF PROCESS SUPERVISION</div>
+    <div class="wordmark">FORG SYNC</div>
+    <div class="product-name">금속 프린팅 작업관리</div>
     <div class="topbar-spacer"></div>
     <div class="top-meta">
-      <span class="top-state"><i id="connection-dot" class="dot"></i><span id="top-phase">STL 입력 대기</span></span>
-      <span class="hide-mobile">316L · 시뮬레이션</span>
+      <span class="top-state"><i id="connection-dot" class="dot"></i><span id="top-phase">작업 등록 대기</span></span>
+      <span class="hide-mobile">스테인리스</span>
       <span id="clock">--:--:--</span>
     </div>
   </header>
 
   <main class="page">
     <div class="toolbar">
-      <div class="crumb">제조 운영 / <strong>작업 감독</strong></div>
+      <div class="crumb">제조 운영 / <strong>작업 관리</strong></div>
       <div class="toolbar-actions">
-        <span class="simulation-note">데모 프로파일 · 실장비와 분리됨</span>
+        <span class="simulation-note">공정 검토 작업공간</span>
       </div>
     </div>
 
     <section class="workflow" aria-label="작업 단계">
       <div id="step-card-upload" class="workflow-step current">
-        <div class="step-heading"><span class="step-index">1</span> STL 등록 · 슬라이싱</div>
-        <div id="step-status-upload" class="step-status">작업 파일을 등록하세요</div>
+        <div class="step-heading"><span class="step-index">1</span> 작업 파일 등록</div>
+        <div id="step-status-upload" class="step-status">STL 파일을 선택해 등록하세요</div>
       </div>
       <div id="step-card-thermal" class="workflow-step">
-        <div class="step-heading"><span class="step-index">2</span> 열해석</div>
-        <div id="step-status-thermal" class="step-status">STL 등록 후 시작 가능</div>
+        <div class="step-heading"><span class="step-index">2</span> 공정 해석</div>
+        <div id="step-status-thermal" class="step-status">파일 등록 후 시작 가능</div>
       </div>
       <div id="step-card-agent" class="workflow-step">
-        <div class="step-heading"><span class="step-index">3</span> AI 분석 · 예측</div>
-        <div id="step-status-agent" class="step-status">열해석 완료 후 시작 가능</div>
+        <div class="step-heading"><span class="step-index">3</span> 공정 위험 분석</div>
+        <div id="step-status-agent" class="step-status">공정 해석 완료 후 시작 가능</div>
       </div>
       <div id="step-card-review" class="workflow-step">
-        <div class="step-heading"><span class="step-index">4</span> 승인 · 가상 적용</div>
-        <div id="step-status-review" class="step-status">분석 결과 검토 대기</div>
+        <div class="step-heading"><span class="step-index">4</span> 권고 조건 검토</div>
+        <div id="step-status-review" class="step-status">분석 결과 확인 대기</div>
       </div>
     </section>
 
     <section class="card">
       <div class="card-head">
-        <span class="card-title">작업 입력</span>
-        <span id="job-status" class="card-subtitle">STL을 등록하면 슬라이싱 결과만 준비됩니다. 분석은 별도 시작합니다.</span>
+        <span class="card-title">작업 파일</span>
+        <span id="job-status" class="card-subtitle">STL 파일과 단위를 확인한 뒤 등록하세요. 해석은 등록 후 시작합니다.</span>
       </div>
       <div class="upload-row">
         <input id="stl-file" type="file" accept=".stl,model/stl" aria-label="출력물 STL 파일" />
         <select id="source-units" aria-label="STL 단위">
           <option value="mm">mm</option><option value="cm">cm</option><option value="m">m</option><option value="in">in</option>
         </select>
-        <button id="upload-button" class="primary" type="button">STL 등록 · 슬라이싱</button>
-        <button id="reset-button" type="button" disabled>새 작업</button>
+        <button id="upload-button" class="primary" type="button">파일 등록 · 경로 생성</button>
+        <button id="reset-button" type="button" disabled>작업 초기화</button>
       </div>
       <div class="upload-progress">
         <div class="progress-track" role="progressbar" aria-label="STL 업로드 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="upload-progress"></span></div>
         <span id="upload-progress-label" class="upload-progress-label">대기</span>
       </div>
       <div class="job-meta">
-        <span id="model-meta">선택된 파일 없음</span>
-        <span id="profile-meta">316L · 예시 공정 프로파일</span>
+        <span id="model-meta">등록된 파일 없음</span>
+        <span id="profile-meta">316L · 기본 공정 조건</span>
       </div>
     </section>
 
@@ -203,15 +204,15 @@
       <div class="card">
         <div class="progress-track thermal"><span id="thermal-progress"></span></div>
         <div class="stage-control">
-          <div><strong>FiPy 열해석</strong><span id="thermal-summary">슬라이싱된 벡터 경로로 정성적 열장을 계산</span></div>
-          <button id="thermal-button" type="button" disabled>열해석 시작</button>
+          <div><strong>공정 해석</strong><span id="thermal-summary">생성된 스캔 경로를 기준으로 열 분포를 추정합니다</span></div>
+          <button id="thermal-button" type="button" disabled>해석 시작</button>
         </div>
       </div>
       <div class="card">
         <div class="progress-track agent"><span id="agent-progress"></span></div>
         <div class="stage-control">
-          <div><strong>Physical AI Agent</strong><span id="agent-summary">열해석 완료 전에는 실행되지 않습니다</span></div>
-          <button id="agent-button" class="primary" type="button" disabled>Agent 가동</button>
+          <div><strong>공정 위험 분석</strong><span id="agent-summary">공정 해석 완료 후 분석할 수 있습니다</span></div>
+          <button id="agent-button" class="primary" type="button" disabled>위험 분석 시작</button>
         </div>
       </div>
     </section>
@@ -219,49 +220,49 @@
     <section class="main-grid">
       <section class="card scene-card">
         <div class="card-head">
-          <span class="card-title">빌드 챔버 · 툴패스</span>
+          <span class="card-title">작업물 · 스캔 경로</span>
           <span id="scene-status" class="card-subtitle">작업 없음</span>
         </div>
         <div class="scene-wrap">
           <canvas id="machine-view" aria-label="LPBF 빌드 챔버와 STL 모델 미리보기"></canvas>
-          <span id="scene-overlay" class="scene-overlay">STL 대기 · 경로 미재생</span>
+          <span id="scene-overlay" class="scene-overlay">작업 파일 등록 대기</span>
         </div>
         <div class="scene-footer"><span id="position-value">X — · Y — · Z — mm</span><span>드래그 회전 · 휠 확대</span></div>
       </section>
 
       <aside class="side-stack">
         <section class="card">
-          <div class="card-head"><span class="card-title">작업 현황</span><span id="phase-label" class="status-pill">대기</span></div>
+          <div class="card-head"><span class="card-title">작업 진행 현황</span><span id="phase-label" class="status-pill">대기</span></div>
           <div class="metric-grid">
-            <div class="metric"><span class="metric-label">레이어</span><strong id="layer-value" class="metric-value">—<small> / —</small></strong></div>
-            <div class="metric"><span class="metric-label">툴패스 벡터</span><strong id="vector-value" class="metric-value">—</strong></div>
-            <div class="metric"><span class="metric-label">열장 hot 영역</span><strong id="hot-value" class="metric-value">—<small>%</small></strong></div>
-            <div class="metric"><span class="metric-label">융점 기준 영역</span><strong id="melt-value" class="metric-value">—<small>%</small></strong></div>
+            <div class="metric"><span class="metric-label">현재 층</span><strong id="layer-value" class="metric-value">—<small> / —</small></strong></div>
+            <div class="metric"><span class="metric-label">전체 스캔 경로</span><strong id="vector-value" class="metric-value">—</strong></div>
+            <div class="metric"><span class="metric-label">고온 영역 비율</span><strong id="hot-value" class="metric-value">—<small>%</small></strong></div>
+            <div class="metric"><span class="metric-label">용융 온도 도달 비율</span><strong id="melt-value" class="metric-value">—<small>%</small></strong></div>
           </div>
         </section>
 
         <section class="card">
-          <div class="card-head"><span class="card-title">물리 상태 · LT 추론</span><span id="physical-status" class="status-pill">대기</span></div>
+          <div class="card-head"><span class="card-title">용융 상태 추정</span><span id="physical-status" class="status-pill">대기</span></div>
           <div class="result-list">
-            <div class="result-row"><span>LT 예측 폭 / 깊이</span><strong id="lt-geometry">—</strong></div>
-            <div class="result-row"><span>정규화 엔탈피 H*</span><strong id="enthalpy-value">—</strong></div>
-            <div class="result-row"><span>LOF 기준</span><strong id="lof-value">—</strong></div>
-            <div class="result-row"><span>공정 방향</span><strong id="direction-value">예측 대기</strong></div>
+            <div class="result-row"><span>용융풀 폭 / 깊이 (추정)</span><strong id="lt-geometry">—</strong></div>
+            <div class="result-row"><span>열에너지 지표</span><strong id="enthalpy-value">—</strong></div>
+            <div class="result-row"><span>미융착 위험 지표</span><strong id="lof-value">—</strong></div>
+            <div class="result-row"><span>위험도 변화</span><strong id="direction-value">분석 대기</strong></div>
           </div>
         </section>
 
         <section class="card recommendation">
-          <div class="card-head"><span class="card-title">장기 공정 변수 권고</span><span class="card-subtitle">벡터 전체 집계</span></div>
+          <div class="card-head"><span class="card-title">권고 공정 조건</span><span class="card-subtitle">작업 전체 분석 결과</span></div>
           <div class="recommendation-body">
-            <div id="recommendation-action" class="recommendation-action">분석 결과 없음</div>
-            <div id="recommendation-detail" class="recommendation-detail">AI 분석이 끝나면 행동 후보와 근거를 표시합니다.</div>
+            <div id="recommendation-action" class="recommendation-action">검토할 권고 없음</div>
+            <div id="recommendation-detail" class="recommendation-detail">위험 분석을 완료하면 권고 조건과 판단 근거가 표시됩니다.</div>
             <div class="recommendation-values">
               <div><span>레이저 출력</span><strong id="recommended-power">— W</strong></div>
               <div><span>스캔 속도</span><strong id="recommended-speed">— mm/s</strong></div>
             </div>
             <div class="review-actions">
-              <button id="approve-button" class="primary" type="button" disabled>승인 · 다음 가상 작업에 적용</button>
-              <button id="reject-button" type="button" disabled>거부</button>
+              <button id="approve-button" class="primary" type="button" disabled>권고 조건 확인</button>
+              <button id="reject-button" type="button" disabled>권고 보류</button>
             </div>
           </div>
         </section>
@@ -271,13 +272,13 @@
     <div id="decision-panel"></div>
 
     <section class="card" style="margin-top:12px">
-      <div class="card-head"><span class="card-title">운영 이벤트</span><span class="card-subtitle">현재 작업 기록</span></div>
+      <div class="card-head"><span class="card-title">작업 이력</span><span class="card-subtitle">현재 작업의 주요 변경 사항</span></div>
       <div id="event-list" class="events" aria-live="polite">
-        <div class="event"><time>--:--:--</time><div><strong>시스템 준비 완료</strong><span>작업 입력을 기다리는 중 · 자동 재생 없음</span></div></div>
+        <div class="event"><time>--:--:--</time><div><strong>새 작업을 시작할 수 있습니다</strong><span>작업 파일을 등록하면 진행 상태와 분석 결과가 여기에 기록됩니다.</span></div></div>
       </div>
     </section>
 
-    <div class="footer-note">실장비 센서·제어기 미연결. 열해석은 FiPy 기반 정성적 2D 모델이며, 센서값·품질보증·실제 장비 동작을 의미하지 않습니다. 권고 승인 시 값은 다음 가상 작업에만 적용됩니다.</div>
+    <div class="footer-bar">2026 601Solutions</div>
   </main>
   <script src="/static/decision_panel.js"></script>
 
@@ -320,50 +321,144 @@
 
     const machine = new THREE.Group();
     scene.add(machine);
-    const metal = new THREE.MeshStandardMaterial({ color: 0xaeb7c1, metalness: 0.56, roughness: 0.4 });
-    const cabinet = new THREE.MeshStandardMaterial({ color: 0xd5d9de, metalness: 0.25, roughness: 0.55 });
-    const darkMetal = new THREE.MeshStandardMaterial({ color: 0x626d79, metalness: 0.5, roughness: 0.43 });
-    const blue = new THREE.MeshStandardMaterial({ color: 0x124191, metalness: 0.25, roughness: 0.4 });
-    const glass = new THREE.MeshStandardMaterial({ color: 0xc4d0dd, transparent: true, opacity: 0.16, roughness: 0.25, depthWrite: false });
+    const metal = new THREE.MeshStandardMaterial({ color: 0x8793a0, metalness: 0.68, roughness: 0.32 });
+    const cabinet = new THREE.MeshStandardMaterial({ color: 0xc6ccd3, metalness: 0.32, roughness: 0.48 });
+    const panel = new THREE.MeshStandardMaterial({ color: 0xe1e5e9, metalness: 0.2, roughness: 0.62 });
+    const darkMetal = new THREE.MeshStandardMaterial({ color: 0x3f4b57, metalness: 0.62, roughness: 0.36 });
+    const blue = new THREE.MeshStandardMaterial({ color: 0x124191, metalness: 0.32, roughness: 0.34 });
+    const glass = new THREE.MeshStandardMaterial({ color: 0xa9c5d8, transparent: true, opacity: 0.12, roughness: 0.18, metalness: 0.16, depthWrite: false });
+    const black = new THREE.MeshStandardMaterial({ color: 0x202933, metalness: 0.38, roughness: 0.5 });
+    const rubber = new THREE.MeshStandardMaterial({ color: 0x252a30, roughness: 0.82 });
+    const powder = new THREE.MeshStandardMaterial({ color: 0x88877f, metalness: 0.12, roughness: 0.95 });
+    const led = new THREE.MeshStandardMaterial({ color: 0x8bc6e8, emissive: 0x2a80b0, emissiveIntensity: 0.45 });
     function block(parent, size, position, material) {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), material);
       mesh.position.set(...position);
       parent.add(mesh);
       return mesh;
     }
-    block(machine, [2.8, .2, 2.45], [0, .12, 0], darkMetal);
-    block(machine, [2.65, .65, 2.3], [0, .52, 0], cabinet);
-    block(machine, [2.2, .12, .08], [0, .9, 0], metal);
-    block(machine, [1.95, .12, 1.95], [0, 1.02, 0], darkMetal);
-    block(machine, [1.78, .07, 1.78], [0, 1.12, 0], metal);
-    for (const x of [-1.08, 1.08]) {
-      for (const z of [-.95, .95]) {
-        block(machine, [.08, 1.32, .08], [x, 1.72, z], metal);
-        block(machine, [.13, .06, .13], [x, 2.39, z], darkMetal);
+
+    // Heavy base, access panels, and service details.
+    block(machine, [2.92, .18, 2.62], [0, .08, 0], darkMetal);
+    block(machine, [2.76, .11, 2.46], [0, .225, 0], metal);
+    block(machine, [2.68, .64, 2.32], [0, .595, 0], cabinet);
+    block(machine, [2.72, .055, 2.36], [0, .93, 0], darkMetal);
+    for (const x of [-1.18, 1.18]) {
+      for (const z of [-1.02, 1.02]) {
+        block(machine, [.19, .13, .19], [x, -.005, z], rubber);
+        block(machine, [.12, .07, .12], [x, .085, z], metal);
       }
     }
-    block(machine, [2.2, .08, .08], [0, 2.28, -.95], darkMetal);
-    block(machine, [2.2, .08, .08], [0, 2.28, .95], darkMetal);
-    block(machine, [2.18, 1.1, .025], [0, 1.58, .96], glass);
-    block(machine, [.025, 1.1, 1.9], [-1.1, 1.58, 0], glass);
-    block(machine, [.025, 1.1, 1.9], [1.1, 1.58, 0], glass);
+    for (const x of [-.62, .62]) {
+      block(machine, [1.16, .48, .025], [x, .59, 1.175], panel);
+      block(machine, [.025, .5, .035], [x, .59, 1.198], metal);
+      block(machine, [.025, .18, .05], [x + (x < 0 ? .49 : -.49), .62, 1.21], darkMetal);
+      for (const y of [.38, .78]) {
+        block(machine, [.045, .018, .018], [x + (x < 0 ? -.53 : .53), y, 1.199], darkMetal);
+      }
+    }
+    block(machine, [.035, .5, .025], [0, .59, 1.19], darkMetal);
+    for (let i = 0; i < 7; i += 1) {
+      block(machine, [.46, .018, .018], [0, .34 + i * .038, 1.202], darkMetal);
+    }
+    block(machine, [.54, .2, .018], [.88, .77, 1.205], black);
+    block(machine, [.46, .13, .012], [.88, .79, 1.218], blue);
+    block(machine, [.38, .012, .012], [.88, .79, 1.228], led);
+    for (let i = 0; i < 3; i += 1) {
+      const indicator = new THREE.Mesh(new THREE.SphereGeometry(.022, 12, 8), i === 0 ? led : metal);
+      indicator.position.set(.75 + i * .12, .66, 1.22);
+      machine.add(indicator);
+    }
+
+    // Enclosed process chamber with framed safety glazing.
+    block(machine, [1.98, .12, 1.98], [0, 1.02, 0], darkMetal);
+    block(machine, [1.82, .055, 1.82], [0, 1.105, 0], metal);
+    block(machine, [2.35, .1, 2.25], [0, 2.37, 0], cabinet);
+    block(machine, [2.48, .06, 2.32], [0, 2.29, 0], darkMetal);
+    for (const x of [-1.08, 1.08]) {
+      block(machine, [.11, 1.22, .11], [x, 1.69, -.94], darkMetal);
+      block(machine, [.11, 1.22, .11], [x, 1.69, .94], darkMetal);
+      block(machine, [.035, 1.05, 1.78], [x * 1.015, 1.69, 0], glass);
+      block(machine, [.07, 1.2, .07], [x * 1.04, 1.69, 0], metal);
+    }
+    block(machine, [2.18, .11, .12], [0, 2.25, -.94], darkMetal);
+    block(machine, [2.18, .11, .12], [0, 2.25, .94], darkMetal);
+    block(machine, [2.04, .035, .035], [0, 1.13, .99], metal);
+    block(machine, [2.04, .035, .035], [0, 2.2, .99], metal);
+    block(machine, [.045, 1.04, .045], [-1.02, 1.67, .99], metal);
+    block(machine, [.045, 1.04, .045], [1.02, 1.67, .99], metal);
+    block(machine, [1.98, .94, .022], [0, 1.67, .972], glass);
+    block(machine, [.16, .28, .025], [1.13, 1.64, 1.015], darkMetal);
+    block(machine, [.025, .2, .035], [1.13, 1.64, 1.04], metal);
+    for (const x of [-1.08, 1.08]) {
+      for (const z of [-.94, .94]) {
+        const fastener = new THREE.Mesh(new THREE.CylinderGeometry(.025, .025, .012, 12), metal);
+        fastener.rotation.x = Math.PI / 2;
+        fastener.position.set(x, 2.18, z);
+        machine.add(fastener);
+      }
+    }
+
+    // Build platform and the two powder feed / overflow wells.
+    block(machine, [1.72, .035, 1.72], [0, 1.145, 0], darkMetal);
+    const plate = block(machine, [1.62, .035, 1.62], [0, 1.155, 0], new THREE.MeshStandardMaterial({ color: 0xaaa596, metalness: 0.25, roughness: .78 }));
+    block(machine, [1.52, .006, 1.52], [0, 1.174, 0], powder);
+    block(machine, [1.8, .07, .1], [0, 1.28, -.81], darkMetal);
+    block(machine, [1.68, .025, .035], [0, 1.23, -.81], metal);
+    block(machine, [1.66, .055, .018], [0, 1.19, -.81], metal);
+    for (const x of [-.91, .91]) {
+      const well = new THREE.Mesh(new THREE.CylinderGeometry(.12, .15, .46, 24), darkMetal);
+      well.position.set(x, .87, 0);
+      machine.add(well);
+      block(machine, [.27, .035, .38], [x, 1.105, 0], metal);
+      block(machine, [.18, .012, .3], [x, 1.13, 0], powder);
+    }
+    for (const x of [-.78, .78]) {
+      block(machine, [.07, .58, .07], [x, .77, -.78], metal);
+    }
+
+    // Gantry, laser carriage, and focusing optics.
     const gantry = new THREE.Group();
     machine.add(gantry);
-    block(gantry, [2.0, .1, .13], [0, 2.08, 0], darkMetal);
+    block(gantry, [2.08, .14, .18], [0, 2.08, 0], darkMetal);
+    block(gantry, [1.96, .025, .045], [0, 2.08, .112], metal);
     const carriage = new THREE.Group();
     gantry.add(carriage);
-    block(carriage, [.32, .15, .25], [0, 2.0, 0], metal);
-    block(carriage, [.18, .1, .18], [0, 1.87, 0], blue);
-    const laser = new THREE.Mesh(new THREE.CylinderGeometry(.012, .03, .65, 12), new THREE.MeshBasicMaterial({ color: 0xd7193f, transparent: true, opacity: .42 }));
+    block(carriage, [.42, .2, .34], [0, 2.0, 0], metal);
+    block(carriage, [.28, .12, .23], [0, 1.84, 0], blue);
+    block(carriage, [.2, .06, .18], [0, 1.745, 0], darkMetal);
+    const focusingLens = new THREE.Mesh(new THREE.CylinderGeometry(.075, .045, .1, 20), metal);
+    focusingLens.position.set(0, 1.67, 0);
+    carriage.add(focusingLens);
+    const laser = new THREE.Mesh(new THREE.CylinderGeometry(.008, .025, .65, 16), new THREE.MeshBasicMaterial({ color: 0xe34d39, transparent: true, opacity: .58 }));
     laser.position.set(0, 1.52, 0);
     machine.add(laser);
-    const plate = block(machine, [1.62, .012, 1.62], [0, 1.17, 0], new THREE.MeshStandardMaterial({ color: 0xb2a98f, roughness: .92 }));
+    const focusPoint = new THREE.Mesh(new THREE.SphereGeometry(.035, 16, 12), new THREE.MeshBasicMaterial({ color: 0xff7147 }));
+    focusPoint.position.set(0, 1.205, 0);
+    focusPoint.visible = false;
+    machine.add(focusPoint);
+    const scanGlow = new THREE.PointLight(0xff5733, 0, .36, 2);
+    scanGlow.position.set(0, 1.22, 0);
+    machine.add(scanGlow);
     const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1.18);
     renderer.localClippingEnabled = true;
 
-    const scanPath = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x124191 }));
-    machine.add(scanPath);
+    const completedPath = new THREE.LineSegments(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0x124191 }),
+    );
+    const riskPath = new THREE.LineSegments(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0xd7193f }),
+    );
+    const activePath = new THREE.LineSegments(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0xff7547 }),
+    );
+    machine.add(completedPath, riskPath, activePath);
     let pathPositions = [];
+    let riskPathPositions = [];
+    let activePathPositions = [];
     let uploadedMesh = null;
     let worldScale = 1;
     let uploadedBounds = null;
@@ -423,19 +518,19 @@
         ));
       }
       const labels = {
-        sliced: ['슬라이싱 완료 · 열해석 시작 가능', '열해석 대기', 'Agent 대기', '결과 대기'],
-        thermal_analysis: ['슬라이싱 완료', '열해석 계산 중', '열해석 완료 후 실행', '분석 결과 대기'],
-        thermal_complete: ['슬라이싱 완료', '열해석 완료', 'Agent 가동 가능', '분석 결과 대기'],
-        agent_running: ['슬라이싱 완료', '열해석 완료', '벡터별 추론 중', '결과 집계 중'],
-        review: ['슬라이싱 완료', '열해석 완료', '추론 완료', '승인 또는 거부 필요'],
-        approved: ['슬라이싱 완료', '열해석 완료', '추론 완료', '가상 변수 적용 승인'],
-        rejected: ['슬라이싱 완료', '열해석 완료', '추론 완료', '권고 거부'],
+        sliced: ['파일 등록 완료 · 해석 시작 가능', '해석 대기', '위험 분석 대기', '권고 조건 확인 대기'],
+        thermal_analysis: ['파일 등록 완료', '공정 해석 중', '해석 완료 후 시작 가능', '권고 조건 확인 대기'],
+        thermal_complete: ['파일 등록 완료', '공정 해석 완료', '위험 분석 시작 가능', '권고 조건 확인 대기'],
+        agent_running: ['파일 등록 완료', '공정 해석 완료', '경로별 위험도 분석 중', '결과 정리 중'],
+        review: ['파일 등록 완료', '공정 해석 완료', '위험 분석 완료', '권고 조건 확인 필요'],
+        approved: ['파일 등록 완료', '공정 해석 완료', '위험 분석 완료', '권고 조건 확인 완료'],
+        rejected: ['파일 등록 완료', '공정 해석 완료', '위험 분석 완료', '권고 조건 보류'],
       }[phase];
       if (labels) stages.forEach((stage, index) => setText(`step-status-${stage}`, labels[index]));
       const display = {
-        sliced: '슬라이싱 완료', thermal_analysis: '열해석 중', thermal_complete: '열해석 완료',
-        agent_running: 'Agent 분석 중', review: '승인 대기', approved: '가상 적용 승인',
-        rejected: '권고 거부',
+        sliced: '파일 등록 완료', thermal_analysis: '공정 해석 중', thermal_complete: '해석 완료',
+        agent_running: '위험 분석 중', review: '권고 확인 대기', approved: '권고 조건 확인 완료',
+        rejected: '권고 조건 보류',
       }[phase] || status || '대기';
       setText('phase-label', display);
       byId('phase-label').className = `status-pill${phase === 'review' ? ' risk' : phase === 'approved' ? ' normal' : ''}`;
@@ -511,10 +606,18 @@
       setText('upload-progress-label', `${Math.round(percent)}%`);
       setText('job-status', `STL 업로드 중 · ${(loaded / 1024 / 1024).toFixed(1)} / ${(total / 1024 / 1024).toFixed(1)} MiB`);
     }
-    function updatePath(segments) {
+    function setPathGeometry(line, positions) {
+      line.geometry.dispose();
+      line.geometry = new THREE.BufferGeometry();
+      line.geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    }
+    function updatePath(segments, results = []) {
       if (!segments?.length || !uploadedBounds) return;
-      const points = [];
-      for (const segment of segments) {
+      const completedPoints = [];
+      const riskPoints = [];
+      const activePoints = [];
+      if (!results.length) pathPositions.push(...activePathPositions);
+      for (const [index, segment] of segments.entries()) {
         const [sx, sy, sz] = segment.start_mm;
         const [ex, ey, ez] = segment.end_mm;
         const toWorld = (x, y, z) => [
@@ -524,19 +627,33 @@
         ];
         const start = toWorld(sx, sy, sz);
         const end = toWorld(ex, ey, ez);
-        points.push(...start, ...end);
+        const result = results[index];
+        const isRisk = result?.physical_state?.status && result.physical_state.status !== 'normal';
+        if (isRisk) riskPoints.push(...start, ...end);
+        else if (index === segments.length - 1) activePoints.push(...start, ...end);
+        else if (!results.length) completedPoints.push(...start, ...end);
         carriage.position.x = end[0];
         gantry.position.z = end[2];
-        laser.position.set(end[0], 1.52, end[2]);
+        const focusY = 1.205 + ez * worldScale;
+        const laserTop = 1.68;
+        laser.scale.y = Math.max(.08, laserTop - focusY) / .65;
+        laser.position.set(end[0], (laserTop + focusY) / 2, end[2]);
+        focusPoint.position.set(end[0], focusY, end[2]);
+        focusPoint.visible = true;
+        scanGlow.position.copy(focusPoint.position);
+        scanGlow.intensity = .9;
         clipPlane.constant = 1.18 + Math.max(0, Math.min(uploadedBounds.height, ez)) * worldScale;
         if (uploadedMesh) uploadedMesh.material.clippingPlanes = [clipPlane];
         setText('position-value', `X ${ex.toFixed(2)} · Y ${ey.toFixed(2)} · Z ${ez.toFixed(2)} mm`);
       }
-      pathPositions.push(...points);
+      pathPositions.push(...completedPoints);
+      riskPathPositions.push(...riskPoints);
+      activePathPositions = activePoints;
       if (pathPositions.length > 90000) pathPositions = pathPositions.slice(-90000);
-      scanPath.geometry.dispose();
-      scanPath.geometry = new THREE.BufferGeometry();
-      scanPath.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pathPositions, 3));
+      if (riskPathPositions.length > 90000) riskPathPositions = riskPathPositions.slice(-90000);
+      setPathGeometry(completedPath, pathPositions);
+      setPathGeometry(riskPath, riskPathPositions);
+      setPathGeometry(activePath, activePathPositions);
     }
     async function showUploadedModel(file, build) {
       const geometry = new STLLoader().parse(await file.arrayBuffer());
@@ -571,10 +688,15 @@
       uploadedBounds = { width, depth, height };
       clipPlane.constant = 1.18 + height * worldScale;
       pathPositions = [];
-      scanPath.geometry.dispose();
-      scanPath.geometry = new THREE.BufferGeometry();
-      setText('scene-overlay', 'STL 모델 · 경로 분석 준비');
-      setText('scene-status', `${build.layer_count} layers · ${build.event_count.toLocaleString()} vectors`);
+      riskPathPositions = [];
+      activePathPositions = [];
+      setPathGeometry(completedPath, pathPositions);
+      setPathGeometry(riskPath, riskPathPositions);
+      setPathGeometry(activePath, activePathPositions);
+      focusPoint.visible = false;
+      scanGlow.intensity = 0;
+      setText('scene-overlay', '작업물 등록 · 경로 분석 준비');
+      setText('scene-status', `${build.layer_count}층 · ${build.event_count.toLocaleString()}개 경로`);
       setText('model-meta', `${file.name} · ${width.toFixed(2)} × ${depth.toFixed(2)} × ${height.toFixed(2)} mm`);
       setText('layer-value', `— / ${build.layer_count}`);
       setText('vector-value', build.event_count.toLocaleString());
@@ -589,42 +711,43 @@
       if (data.thermal_summary?.hot_cell_fraction_avg != null) {
         setText('hot-value', `${(data.thermal_summary.hot_cell_fraction_avg * 100).toFixed(2)}%`);
         setText('melt-value', `${(data.thermal_summary.reference_threshold_fraction_avg * 100).toFixed(3)}%`);
-        setText('thermal-summary', `벡터 ${data.thermal_event_index.toLocaleString()} / ${total.toLocaleString()} · 평균 hot 영역 ${ (data.thermal_summary.hot_cell_fraction_avg * 100).toFixed(2)}%`);
+        setText('thermal-summary', `경로 ${data.thermal_event_index.toLocaleString()} / ${total.toLocaleString()} · 평균 고온 영역 ${(data.thermal_summary.hot_cell_fraction_avg * 100).toFixed(2)}%`);
       }
-      if (data.segments) updatePath(data.segments);
+      if (data.segments) updatePath(data.segments, data.results || []);
       const results = data.results || [];
       const last = results.length ? results[results.length - 1] : data.last_result;
       if (last?.physical_state) {
         const state = last.physical_state;
-        setText('physical-status', state.status === 'normal' ? '정상' : state.status === 'lof_risk' ? 'LOF 위험' : 'Keyhole 위험');
+        setText('physical-status', state.status === 'normal' ? '정상' : state.status === 'lof_risk' ? '미융착 위험' : '과열 위험');
         byId('physical-status').className = `status-pill ${state.status === 'normal' ? 'normal' : 'risk'}`;
         setText('lt-geometry', `${last.prediction.melt_width.toFixed(1)} / ${last.prediction.melt_depth.toFixed(1)} μm`);
         setText('enthalpy-value', state.normalized_enthalpy.toFixed(2));
         setText('lof-value', state.lof_criterion.toFixed(2));
         if (data.risk_counts) {
           setText('direction-value', data.recommendation?.predicted_direction === 'risk_increasing'
-            ? '위험 증가 추세'
+            ? '상승 추세'
             : data.recommendation?.predicted_direction === 'risk_decreasing'
-              ? '위험 감소 추세'
+              ? '하락 추세'
               : data.recommendation?.predicted_direction === 'stable'
-                ? '안정 추세' : '분석 중');
+                ? '변화 없음' : '분석 중');
         }
-        setText('agent-summary', `LT 추론 ${data.agent_progress_pct.toFixed(1)}% · ${last.prediction.prediction_model}`);
+        setText('agent-summary', `위험 분석 ${data.agent_progress_pct.toFixed(1)}% · ${data.event_index.toLocaleString()}개 경로 확인`);
         if (results.length) {
           const latest = results[results.length - 1];
-          addEvent(`벡터 분석 · ${state.status}`, `${latest.decision.recommended_action} · W ${latest.prediction.melt_width.toFixed(1)} / D ${latest.prediction.melt_depth.toFixed(1)} μm`, state.status !== 'normal');
+          const status = state.status === 'normal' ? '정상' : state.status === 'lof_risk' ? '미융착 위험' : '과열 위험';
+          addEvent(`경로 분석 · ${status}`, `${latest.decision.recommended_action} · 용융풀 폭 ${latest.prediction.melt_width.toFixed(1)} / 깊이 ${latest.prediction.melt_depth.toFixed(1)} μm`, state.status !== 'normal');
         }
       }
       setStage(data.phase);
       if (data.phase === 'thermal_complete') {
         byId('thermal-button').disabled = true;
         byId('agent-button').disabled = false;
-        setText('thermal-summary', `해석 완료 · ${data.thermal_event_index.toLocaleString()} vectors`);
+        setText('thermal-summary', `해석 완료 · ${data.thermal_event_index.toLocaleString()}개 경로`);
       }
       if (data.phase === 'review' && data.recommendation) {
         const rec = data.recommendation;
         setText('recommendation-action', rec.action);
-        setText('recommendation-detail', `${rec.predicted_direction === 'risk_increasing' ? '위험 증가 경향' : rec.predicted_direction === 'risk_decreasing' ? '위험 감소 경향' : rec.predicted_direction === 'stable' ? '위험 안정 경향' : '추세 판단 자료 부족'} · 전체 ${data.event_index.toLocaleString()}개 벡터 중 ${rec.supporting_vectors}개에서 후보 선택`);
+        setText('recommendation-detail', `위험도 ${rec.predicted_direction === 'risk_increasing' ? '상승 추세' : rec.predicted_direction === 'risk_decreasing' ? '하락 추세' : rec.predicted_direction === 'stable' ? '변화 없음' : '판단 자료 부족'} · 전체 ${data.event_index.toLocaleString()}개 경로 중 ${rec.supporting_vectors}개 경로에서 권고 조건을 확인했습니다.`);
         setText('recommended-power', `${rec.laser_power_w.toFixed(1)} W`);
         setText('recommended-speed', `${rec.scan_speed_mm_s.toFixed(1)} mm/s`);
         byId('approve-button').disabled = false;
@@ -634,8 +757,8 @@
         byId('approve-button').disabled = true;
         byId('reject-button').disabled = true;
         setText('recommendation-detail', data.phase === 'approved'
-          ? '승인 완료 · 다음 가상 작업의 공정 변수로 저장됨. 실장비에는 적용되지 않았습니다.'
-          : '권고를 거부했습니다. 공정 변수는 변경하지 않았습니다.');
+          ? '확인 완료 · 다음 작업 검토를 위한 공정 조건으로 저장했습니다. 장비에는 전달되지 않았습니다.'
+          : '권고 조건을 보류했습니다. 작업 조건은 변경하지 않았습니다.');
       }
     }
     const pause = ms => new Promise(resolve => window.setTimeout(resolve, ms));
@@ -643,11 +766,11 @@
     byId('upload-button').addEventListener('click', async () => {
       const file = byId('stl-file').files[0];
       if (!file) {
-        setText('job-status', '먼저 STL 파일을 선택하세요.');
+        setText('job-status', '등록할 STL 파일을 먼저 선택하세요.');
         return;
       }
       if (file.size > 15 * 1024 * 1024) {
-        setText('job-status', '파일 크기는 15 MiB 이하로 제한됩니다.');
+        setText('job-status', '파일 크기는 15 MiB 이하로 제한됩니다. 파일을 확인한 뒤 다시 등록하세요.');
         return;
       }
       byId('upload-button').disabled = true;
@@ -655,7 +778,7 @@
       byId('upload-progress').style.width = '0%';
       byId('upload-progress').parentElement.setAttribute('aria-valuenow', '0');
       setText('upload-progress-label', '0%');
-      setText('job-status', 'STL 업로드 준비 중');
+      setText('job-status', '파일 등록 준비 중');
       try {
         const units = byId('source-units').value;
         const build = await uploadStlFile(
@@ -664,7 +787,7 @@
           updateUploadProgress,
         );
         setText('upload-progress-label', '처리 중');
-        setText('job-status', '업로드 완료 · 서버에서 STL 검사 및 슬라이싱 중');
+        setText('job-status', '파일 전송 완료 · 형상 확인 및 스캔 경로 생성 중');
         uploadedBuild = build;
         await showUploadedModel(file, build);
         byId('thermal-button').disabled = false;
@@ -675,15 +798,15 @@
         byId('upload-progress').style.width = '100%';
         byId('upload-progress').parentElement.setAttribute('aria-valuenow', '100');
         setText('upload-progress-label', '완료');
-        setText('job-status', `슬라이싱 완료 · ${build.profile_origin}`);
+        setText('job-status', `파일 등록 완료 · ${build.layer_count}층 · ${build.event_count.toLocaleString()}개 경로`);
         setText('profile-meta', `${build.material} · ${build.process.laser_power_w} W · ${build.process.scan_speed_mm_s} mm/s`);
         setStage(build.phase);
-        addEvent('STL 등록 및 슬라이싱 완료', `${build.layer_count} layers · ${build.event_count.toLocaleString()} vectors`);
+        addEvent('작업 파일 등록 완료', `${build.layer_count}층 · 스캔 경로 ${build.event_count.toLocaleString()}개`);
       } catch (error) {
-        setText('job-status', `등록 실패 · ${error.message}`);
+        setText('job-status', `파일 등록 실패 · ${error.message}`);
         setText('upload-progress-label', '실패');
         byId('connection-dot').className = 'dot error';
-        addEvent('STL 등록 실패', error.message, true);
+        addEvent('파일 등록 실패', error.message, true);
       } finally {
         byId('upload-button').disabled = false;
         byId('reset-button').disabled = !uploadedBuild;
@@ -693,7 +816,7 @@
       if (!uploadedBuild || processing) return;
       processing = true;
       byId('thermal-button').disabled = true;
-      setText('job-status', 'FiPy 열해석 수행 중');
+      setText('job-status', '공정 해석을 진행하고 있습니다.');
       try {
         let result;
         do {
@@ -706,12 +829,12 @@
           return;
         }
         if (result.phase === 'thermal_complete') {
-          setText('job-status', '열해석 완료 · 사용자 승인 후 AI Agent를 시작할 수 있습니다.');
-          addEvent('FiPy 열해석 완료', `${result.thermal_event_index.toLocaleString()} scan vectors`);
+          setText('job-status', '공정 해석 완료 · 위험 분석을 시작할 수 있습니다.');
+          addEvent('공정 해석 완료', `스캔 경로 ${result.thermal_event_index.toLocaleString()}개 확인`);
         }
       } catch (error) {
-        setText('job-status', `열해석 실패 · ${error.message}`);
-        addEvent('열해석 실패', error.message, true);
+        setText('job-status', `공정 해석 실패 · ${error.message}`);
+        addEvent('공정 해석 실패', error.message, true);
         byId('thermal-button').disabled = false;
       } finally {
         processing = false;
@@ -721,7 +844,7 @@
       if (!uploadedBuild || processing) return;
       processing = true;
       byId('agent-button').disabled = true;
-      setText('job-status', 'AI Agent가 스캔 벡터를 분석 중');
+      setText('job-status', '스캔 경로별 용융 상태와 위험도를 분석하고 있습니다.');
       try {
         await api(`/api/builds/${uploadedBuild.build_id}/agent/start`, { method: 'POST' });
         let result;
@@ -735,12 +858,12 @@
           return;
         }
         if (result.phase === 'review') {
-          setText('job-status', '분석 완료 · 권고 내용을 확인하고 승인 또는 거부하세요.');
-          addEvent('AI Agent 분석 완료', `권고 · ${result.recommendation.action}`, result.recommendation.action !== '공정 유지');
+          setText('job-status', '분석 완료 · 권고 조건과 판단 근거를 확인하세요.');
+          addEvent('위험 분석 완료', `권고 조건 · ${result.recommendation.action}`, result.recommendation.action !== '공정 유지');
         }
       } catch (error) {
-        setText('job-status', `Agent 실행 실패 · ${error.message}`);
-        addEvent('Agent 실행 실패', error.message, true);
+        setText('job-status', `위험 분석 실패 · ${error.message}`);
+        addEvent('위험 분석 실패', error.message, true);
         byId('agent-button').disabled = false;
       } finally {
         processing = false;
@@ -757,9 +880,9 @@
           body: JSON.stringify({ approved }),
         });
         updateBuild(result);
-        addEvent(approved ? '권고 승인 · 가상 변수 적용' : '권고 거부', approved
-          ? `${result.recommendation.laser_power_w} W · ${result.recommendation.scan_speed_mm_s} mm/s · 다음 가상 작업에 저장`
-          : '공정 변수 변경 없음');
+        addEvent(approved ? '권고 조건 확인 완료' : '권고 조건 보류', approved
+          ? `출력 ${result.recommendation.laser_power_w} W · 속도 ${result.recommendation.scan_speed_mm_s} mm/s · 다음 작업 검토 조건으로 저장`
+          : '작업 조건은 변경하지 않았습니다.');
       } catch (error) {
         setText('job-status', `승인 처리 실패 · ${error.message}`);
         byId('approve-button').disabled = false;

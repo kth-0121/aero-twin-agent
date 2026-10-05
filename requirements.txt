@@ -10,3 +10,6 @@ joblib
 fastapi
 uvicorn[standard]
 pybullet
+trimesh
+shapely
+fipy

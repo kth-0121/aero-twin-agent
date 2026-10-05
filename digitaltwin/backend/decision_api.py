@@ -10,6 +10,7 @@ DT 콘솔(main.py)에 router 한 줄로 붙는다. 기존 콘솔 코드는 건�
 검증기는 sim.decision의 ROM 재평가 방식이다 (PyBullet 물리 솔버가 아님) -- 응답의
 `verification` 필드에 그 사실을 명시한다.
 """
+import logging
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -25,6 +26,7 @@ if str(_REPO_ROOT) not in sys.path:
 from sim.decision import assess_state, recommend_action  # noqa: E402
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 SCENARIOS = [
     {"id": "normal", "label": "정상 조건", "power_w": 250, "speed_mm_s": 800},
@@ -62,7 +64,10 @@ def _range_warnings(c: Condition) -> list[str]:
     for key, (lo, hi) in _training_range().items():
         value = getattr(c, key)
         if not lo <= value <= hi:
-            out.append(f"{names[key]} {value:g}는 학습 데이터 범위({lo:g}~{hi:g}) 밖 -- 외삽 예측이라 신뢰도 낮음")
+            out.append(
+                f"{names[key]} {value:g}는 확인된 공정 데이터 범위({lo:g}~{hi:g})를 벗어납니다. "
+                "해당 조건의 예측 신뢰도가 낮을 수 있습니다."
+            )
     return out
 
 
@@ -105,8 +110,9 @@ def agent(q: Question):
         from agent.loop import ask_agent
 
         return {"answer": ask_agent(q.question)}
-    except Exception as exc:  # Ollama 미기동 등
-        raise HTTPException(503, f"Agent 호출 실패 (Ollama 서버 확인): {exc}")
+    except Exception:
+        logger.exception("공정 조건 문의 처리 실패")
+        raise HTTPException(503, "문의 처리를 완료하지 못했습니다. 분석 서비스 상태를 확인한 뒤 다시 시도하세요.") from None
 
 
 @router.get("/decision")
