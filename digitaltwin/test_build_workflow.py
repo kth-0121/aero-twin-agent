@@ -15,6 +15,7 @@ from digitaltwin.fipy_dt import ThermalSnapshot
 def make_session(phase="sliced"):
     process = {"laser_power_w": 200.0, "scan_speed_mm_s": 800.0}
     event = SimpleNamespace(
+        event_id="vector-1",
         process=process,
         start_mm=(0.0, 0.0, 0.0),
         end_mm=(1.0, 0.0, 0.0),
@@ -191,6 +192,20 @@ class BuildWorkflowTests(unittest.TestCase):
         self.assertEqual(session.status()["agent_progress_pct"], 0.0)
         self.assertIsNone(session.thermal_twin)
 
+    def test_large_build_uses_bounded_thermal_grid_and_substeps(self):
+        session = make_session()
+        session.plan.settings = SimpleNamespace(
+            process=SimpleNamespace(spot_diameter_mm=0.1)
+        )
+        fake_twin = object()
+
+        with patch.object(main, "FiPyThermalTwin", return_value=fake_twin) as factory:
+            result = session.ensure_thermal_twin()
+
+        self.assertIs(result, fake_twin)
+        self.assertEqual(factory.call_args.kwargs["max_cells"], 10_000)
+        self.assertEqual(factory.call_args.kwargs["max_substeps_per_vector"], 2)
+
     def test_agent_cannot_start_before_thermal_analysis_finishes(self):
         session = make_session()
         with patch.object(main, "active_build", session), patch.object(main, "lt_predictor", None):
@@ -198,6 +213,20 @@ class BuildWorkflowTests(unittest.TestCase):
                 asyncio.run(main.start_agent("test-build"))
 
         self.assertEqual(error.exception.status_code, 409)
+        self.assertIn("0/1 paths complete", error.exception.detail)
+
+    def test_agent_start_uses_completed_thermal_cursor_as_authoritative(self):
+        session = make_session(phase="thermal_analysis")
+        session.thermal_cursor = len(session.events)
+        predictor = object()
+
+        with (
+            patch.object(main, "active_build", session),
+            patch.object(main, "lt_predictor", predictor),
+        ):
+            result = asyncio.run(main.start_agent("test-build"))
+
+        self.assertEqual(result["phase"], "agent_running")
 
     def test_thermal_analysis_advances_only_when_operator_requests_it(self):
         session = make_session()
@@ -223,6 +252,32 @@ class BuildWorkflowTests(unittest.TestCase):
         self.assertEqual(result["phase"], "thermal_complete")
         self.assertEqual(result["thermal_event_index"], 1)
         self.assertAlmostEqual(result["thermal_summary"]["hot_cell_fraction_avg"], 0.2)
+
+    def test_thermal_analysis_processes_only_small_batch_per_request(self):
+        session = make_session(phase="thermal_analysis")
+        session.events = (session.events[0], session.events[0], session.events[0])
+
+        class FakeThermalTwin:
+            def consume(self, event):
+                return ThermalSnapshot(
+                    event_id=event.event_id,
+                    hot_cell_count=1,
+                    reference_threshold_cell_count=0,
+                    hot_cell_fraction=0.1,
+                    reference_threshold_cell_fraction=0.0,
+                    grid_shape=(5, 4),
+                    cell_size_mm=(0.25, 0.25),
+                )
+
+        with (
+            patch.object(main, "active_build", session),
+            patch.object(session, "ensure_thermal_twin", return_value=FakeThermalTwin()),
+        ):
+            result = asyncio.run(main.step_thermal_analysis("test-build", count=2))
+
+        self.assertEqual(result["phase"], "thermal_analysis")
+        self.assertEqual(result["thermal_event_index"], 2)
+        self.assertEqual(len(result["thermal_results"]), 2)
 
     def test_recommendation_is_created_only_after_all_agent_vectors(self):
         session = make_session()

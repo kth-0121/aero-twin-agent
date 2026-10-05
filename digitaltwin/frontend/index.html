@@ -703,6 +703,11 @@
       setText('layer-value', `— / ${build.layer_count}`);
       setText('vector-value', build.event_count.toLocaleString());
     }
+    function updateWorkflowButtons() {
+      const phase = uploadedBuild?.phase;
+      byId('thermal-button').disabled = processing || !['sliced', 'thermal_analysis'].includes(phase);
+      byId('agent-button').disabled = processing || phase !== 'thermal_complete';
+    }
     function updateBuild(data) {
       uploadedBuild = { ...uploadedBuild, ...data };
       const total = Math.max(data.event_count, 1);
@@ -741,9 +746,8 @@
         }
       }
       setStage(data.phase);
+      updateWorkflowButtons();
       if (data.phase === 'thermal_complete') {
-        byId('thermal-button').disabled = true;
-        byId('agent-button').disabled = false;
         setText('thermal-summary', `해석 완료 · ${data.thermal_event_index.toLocaleString()}개 경로`);
       }
       if (data.phase === 'review' && data.recommendation) {
@@ -824,7 +828,7 @@
         uploadedBuild = build;
         await showUploadedModel(file, build);
         byId('thermal-button').disabled = false;
-        byId('agent-button').disabled = true;
+        updateWorkflowButtons();
         byId('reset-button').disabled = false;
         byId('approve-button').disabled = true;
         byId('reject-button').disabled = true;
@@ -864,7 +868,7 @@
       try {
         let result;
         do {
-          result = await api(`/api/builds/${uploadedBuild.build_id}/thermal-step?count=16`, { method: 'POST' });
+          result = await api(`/api/builds/${uploadedBuild.build_id}/thermal-step?count=2`, { method: 'POST' });
           updateBuild(result);
           await pause(40);
         } while (!stopping && result.phase === 'thermal_analysis');
@@ -882,6 +886,7 @@
         byId('thermal-button').disabled = false;
       } finally {
         processing = false;
+        updateWorkflowButtons();
       }
     });
     byId('agent-button').addEventListener('click', async () => {
@@ -908,9 +913,14 @@
       } catch (error) {
         setText('job-status', `위험 분석 실패 · ${error.message}`);
         addEvent('위험 분석 실패', error.message, true);
-        byId('agent-button').disabled = false;
+        try {
+          updateBuild(await api(`/api/builds/${uploadedBuild.build_id}`));
+        } catch (statusError) {
+          addEvent('작업 상태 새로고침 실패', statusError.message, true);
+        }
       } finally {
         processing = false;
+        updateWorkflowButtons();
       }
     });
     async function review(approved) {

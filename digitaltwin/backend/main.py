@@ -323,6 +323,8 @@ class BuildReplaySession:
             build_width_mm=max(conversion.build_width_mm, resolution_mm) + 2 * padding_mm,
             build_depth_mm=max(conversion.build_depth_mm, resolution_mm) + 2 * padding_mm,
             resolution_mm=resolution_mm,
+            max_cells=10_000,
+            max_substeps_per_vector=2,
         )
         return self.thermal_twin
 
@@ -629,7 +631,7 @@ async def get_build(build_id: str):
 @app.post("/api/builds/{build_id}/thermal-step")
 async def step_thermal_analysis(
     build_id: str,
-    count: int = Query(default=16, ge=1, le=64),
+    count: int = Query(default=2, ge=1, le=2),
 ):
     if active_build is None or active_build.build_id != build_id:
         raise HTTPException(status_code=404, detail="Build job not found")
@@ -675,8 +677,15 @@ async def start_agent(build_id: str):
     global lt_predictor
     if active_build is None or active_build.build_id != build_id:
         raise HTTPException(status_code=404, detail="Build job not found")
-    if active_build.phase != "thermal_complete":
-        raise HTTPException(status_code=409, detail="Complete thermal analysis before starting the AI Agent")
+    if active_build.thermal_cursor < len(active_build.events):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Complete thermal analysis before starting the AI Agent "
+                f"({active_build.thermal_cursor}/{len(active_build.events)} paths complete)"
+            ),
+        )
+    active_build.phase = "thermal_complete"
     if lt_predictor is None:
         try:
             lt_predictor = await asyncio.to_thread(V5StreamingLTPredictor.from_artifacts)
