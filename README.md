@@ -1,4 +1,4 @@
-# aero-twin-agent
+# Physics-aware Physical AI 기반 우주항공 제조 Digital Twin Agent 개발
 
 Physics Reasoning Agent를 활용한 우주항공 제조 Digital Twin 지능화 — 제4회 경남 AI·SW경진대회.
 팀 601Solutions (전혁건·문기준·권태훈).
