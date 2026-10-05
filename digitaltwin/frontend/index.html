@@ -774,9 +774,12 @@
         return;
       }
       setText('upload-progress-label', `${percent}%`);
+      const retry = registration.slicing_attempt > 1
+        ? ` · 경로 수 조정 재시도 ${registration.slicing_attempt - 1}/${registration.max_slicing_attempts - 1}`
+        : '';
       setText(
         'job-status',
-        `슬라이싱 중 · ${registration.layers_completed.toLocaleString()} / ${registration.total_layers.toLocaleString()}층`,
+        `슬라이싱 중${retry} · ${registration.layers_completed.toLocaleString()} / ${registration.total_layers.toLocaleString()}층`,
       );
     }
     async function waitForBuildRegistration(buildId) {
@@ -826,10 +829,21 @@
         byId('upload-progress').style.width = '100%';
         byId('upload-progress').parentElement.setAttribute('aria-valuenow', '100');
         setText('upload-progress-label', '완료');
-        setText('job-status', `파일 등록 완료 · ${build.layer_count}층 · ${build.event_count.toLocaleString()}개 경로`);
-        setText('profile-meta', `${build.material} · ${build.process.laser_power_w} W · ${build.process.scan_speed_mm_s} mm/s`);
+        const resolutionDescription = `층 ${build.process.layer_thickness_um.toFixed(1)} μm / 간격 ${build.process.hatch_spacing_mm.toFixed(3)} mm`;
+        const resolutionNote = build.slicing_adjusted
+          ? ` · 자동 조정 적용 (${resolutionDescription})`
+          : '';
+        setText('job-status', `파일 등록 완료 · ${build.layer_count}층 · ${build.event_count.toLocaleString()}개 경로${resolutionNote}`);
+        setText('profile-meta', `${build.material} · ${build.process.laser_power_w} W · ${build.process.scan_speed_mm_s} mm/s · 층 ${build.process.layer_thickness_um.toFixed(1)} μm / 간격 ${build.process.hatch_spacing_mm.toFixed(3)} mm`);
         setStage(build.phase);
         addEvent('작업 파일 등록 완료', `${build.layer_count}층 · 스캔 경로 ${build.event_count.toLocaleString()}개`);
+        if (build.slicing_adjusted) {
+          addEvent(
+            '경로 수 자동 조정',
+            `100,000개 이하로 맞추기 위해 층 두께와 해치 간격을 조정했습니다 · ${resolutionDescription}`,
+            true,
+          );
+        }
       } catch (error) {
         setText('job-status', `파일 등록 실패 · ${error.message}`);
         setText('upload-progress-label', '실패');

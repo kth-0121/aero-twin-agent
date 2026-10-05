@@ -23,6 +23,9 @@ from sim.decision import find_safe_conditions, recommend_action_from_prediction
 from sim.lpbf import evaluate_physical_state
 from .decision_api import router as decision_router  # 판단/행동/Agent API
 
+MAX_SCAN_VECTORS = 300_000
+MAX_SLICING_ATTEMPTS = 6
+
 app = FastAPI(title="Physical AI Digital Twin")
 app.include_router(decision_router)
 FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
@@ -54,6 +57,8 @@ class BuildRegistration:
     error: str | None = None
     error_status: int = 422
     slicing_percent: int = 0
+    slicing_attempt: int = 1
+    max_slicing_attempts: int = MAX_SLICING_ATTEMPTS
     layers_completed: int = 0
     total_layers: int | None = None
 
@@ -402,21 +407,44 @@ def _prepare_uploaded_build(
     source_units: str,
     progress_callback=None,
 ):
+    working_settings = settings
     with tempfile.TemporaryDirectory(prefix="aero-twin-build-") as work_dir:
         stl_path = Path(work_dir) / "upload.stl"
         cli_path = Path(work_dir) / "build.cli"
         stl_path.write_bytes(body)
-        plan = create_build_plan(
-            stl_path,
-            cli_path,
-            settings,
-            source_units=source_units,
-            progress_callback=progress_callback,
-        )
-        events = tuple(plan.iter_events())
-    if len(events) > 100_000:
-        raise ValueError("STL creates more than 100,000 scan vectors")
-    return plan, events
+        for attempt in range(1, MAX_SLICING_ATTEMPTS + 1):
+            def slice_progress(completed: int, total: int):
+                if progress_callback is not None:
+                    progress_callback(
+                        attempt, MAX_SLICING_ATTEMPTS, completed, total
+                    )
+
+            plan = create_build_plan(
+                stl_path,
+                cli_path,
+                working_settings,
+                source_units=source_units,
+                progress_callback=slice_progress,
+            )
+            vector_count = len(plan.cli_job.segments)
+            if vector_count <= MAX_SCAN_VECTORS:
+                return plan, tuple(plan.iter_events()), working_settings, attempt
+            if attempt == MAX_SLICING_ATTEMPTS:
+                raise ValueError(
+                    f"STL still creates {vector_count:,} scan vectors after "
+                    f"{MAX_SLICING_ATTEMPTS - 1} automatic resolution adjustments"
+                )
+
+            scale = max(1.1, math.sqrt(vector_count / MAX_SCAN_VECTORS) * 1.05)
+            working_settings = replace(
+                working_settings,
+                process=replace(
+                    working_settings.process,
+                    hatch_spacing_mm=working_settings.process.hatch_spacing_mm * scale,
+                    layer_thickness_um=working_settings.process.layer_thickness_um * scale,
+                ),
+            )
+    raise RuntimeError("STL slicing ended without a build plan")
 
 
 async def _process_build_registration(
@@ -431,18 +459,25 @@ async def _process_build_registration(
     loop = asyncio.get_running_loop()
     last_reported_percent = -1
 
-    def report_progress(completed: int, total: int):
+    def report_progress(attempt: int, max_attempts: int, completed: int, total: int):
         nonlocal last_reported_percent
-        percent = round(completed / total * 100) if total else 0
+        attempt_percent = completed / total if total else 0
+        percent = min(99, round(attempt_percent * 100))
         if percent == last_reported_percent:
             return
         last_reported_percent = percent
         loop.call_soon_threadsafe(
-            _update_build_registration_progress, registration, completed, total, percent
+            _update_build_registration_progress,
+            registration,
+            attempt,
+            max_attempts,
+            completed,
+            total,
+            percent,
         )
 
     try:
-        plan, events = await asyncio.to_thread(
+        plan, events, final_settings, slicing_attempts = await asyncio.to_thread(
             _prepare_uploaded_build, body, settings, source_units, report_progress
         )
     except (OSError, ValueError, RuntimeError) as exc:
@@ -469,13 +504,15 @@ async def _process_build_registration(
         "slicing_percent": 100,
         "layers_completed": registration.layers_completed,
         "total_layers": registration.total_layers,
+        "slicing_attempts": slicing_attempts,
+        "slicing_adjusted": slicing_attempts > 1,
         "machine_id": settings.machine.machine_id,
         "material": settings.material,
         "process": {
-            "laser_power_w": settings.process.laser_power_w,
-            "scan_speed_mm_s": settings.process.scan_speed_mm_s,
-            "layer_thickness_um": settings.process.layer_thickness_um,
-            "hatch_spacing_mm": settings.process.hatch_spacing_mm,
+            "laser_power_w": final_settings.process.laser_power_w,
+            "scan_speed_mm_s": final_settings.process.scan_speed_mm_s,
+            "layer_thickness_um": final_settings.process.layer_thickness_um,
+            "hatch_spacing_mm": final_settings.process.hatch_spacing_mm,
         },
         "profile_origin": "illustrative 316L demo profile",
         "thermal_model": "FiPy reduced-order 2D heat equation",
@@ -486,10 +523,14 @@ async def _process_build_registration(
 
 def _update_build_registration_progress(
     registration: BuildRegistration,
+    attempt: int,
+    max_attempts: int,
     completed: int,
     total: int,
     percent: int,
 ):
+    registration.slicing_attempt = attempt
+    registration.max_slicing_attempts = max_attempts
     registration.layers_completed = completed
     registration.total_layers = total
     registration.slicing_percent = percent
@@ -564,6 +605,8 @@ async def get_build(build_id: str):
                 "phase": "slicing",
                 "registration_status": "processing",
                 "slicing_percent": registration.slicing_percent,
+                "slicing_attempt": registration.slicing_attempt,
+                "max_slicing_attempts": registration.max_slicing_attempts,
                 "layers_completed": registration.layers_completed,
                 "total_layers": registration.total_layers,
             }

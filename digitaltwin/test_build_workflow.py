@@ -29,6 +29,7 @@ def make_session(phase="sliced"):
             build_height_mm=0.1,
         ),
     )
+    plan.iter_events = lambda: iter(())
     return BuildReplaySession(
         build_id="test-build",
         plan=plan,
@@ -88,7 +89,7 @@ class BuildWorkflowTests(unittest.TestCase):
             patch.dict(main.build_registrations, {"ready-build": registration}),
             patch.object(main, "active_build", None),
             patch.object(main, "lt_predictor", None),
-            patch.object(main, "_prepare_uploaded_build", return_value=(plan, ())),
+            patch.object(main, "_prepare_uploaded_build", return_value=(plan, (), settings, 1)),
         ):
             asyncio.run(prepare_build())
             result = asyncio.run(main.get_build("ready-build"))
@@ -96,6 +97,76 @@ class BuildWorkflowTests(unittest.TestCase):
         self.assertEqual(registration.state, "complete")
         self.assertEqual(result["registration_status"], "complete")
         self.assertEqual(result["event_count"], 0)
+        self.assertFalse(result["slicing_adjusted"])
+        self.assertEqual(result["slicing_attempts"], 1)
+
+    def test_large_build_is_resliced_with_coarser_resolution(self):
+        settings = main.demo_316l_settings()
+        used_settings = []
+        progress_updates = []
+        vector_counts = iter((main.MAX_SCAN_VECTORS + 1, main.MAX_SCAN_VECTORS))
+
+        def make_plan(stl_path, cli_path, current_settings, **options):
+            self.assertTrue(stl_path.is_file())
+            self.assertEqual(cli_path.name, "build.cli")
+            self.assertEqual(options["source_units"], "mm")
+            used_settings.append(current_settings)
+            options["progress_callback"](0, 1)
+            options["progress_callback"](1, 1)
+            count = next(vector_counts)
+            plan = SimpleNamespace(
+                cli_job=SimpleNamespace(segments=[None] * count),
+                iter_events=lambda: iter(("event",)),
+            )
+            return plan
+
+        with patch.object(main, "create_build_plan", side_effect=make_plan):
+            plan, events, final_settings, attempts = main._prepare_uploaded_build(
+                b"stl",
+                settings,
+                "mm",
+                lambda *update: progress_updates.append(update),
+            )
+
+        self.assertEqual(attempts, 2)
+        self.assertEqual(len(plan.cli_job.segments), main.MAX_SCAN_VECTORS)
+        self.assertEqual(events, ("event",))
+        self.assertGreater(
+            final_settings.process.hatch_spacing_mm,
+            settings.process.hatch_spacing_mm,
+        )
+        self.assertGreater(
+            final_settings.process.layer_thickness_um,
+            settings.process.layer_thickness_um,
+        )
+        self.assertEqual(used_settings[0], settings)
+        self.assertEqual(used_settings[1], final_settings)
+        self.assertEqual(
+            [update[:2] for update in progress_updates],
+            [(1, main.MAX_SLICING_ATTEMPTS)] * 2
+            + [(2, main.MAX_SLICING_ATTEMPTS)] * 2,
+        )
+
+    def test_build_still_fails_if_vector_cap_is_exceeded_after_adjustments(self):
+        settings = main.demo_316l_settings()
+
+        def make_oversized_plan(stl_path, cli_path, current_settings, **options):
+            self.assertTrue(stl_path.is_file())
+            self.assertEqual(cli_path.name, "build.cli")
+            current_settings.validate()
+            options["progress_callback"](0, 1)
+            return SimpleNamespace(
+                cli_job=SimpleNamespace(
+                    segments=[None] * (main.MAX_SCAN_VECTORS + 1)
+                ),
+            )
+
+        with (
+            patch.object(main, "MAX_SLICING_ATTEMPTS", 2),
+            patch.object(main, "create_build_plan", side_effect=make_oversized_plan),
+            self.assertRaisesRegex(ValueError, "after 1 automatic resolution adjustments"),
+        ):
+            main._prepare_uploaded_build(b"stl", settings, "mm")
 
     def test_build_registration_exposes_slicing_errors(self):
         registration = main.BuildRegistration()
