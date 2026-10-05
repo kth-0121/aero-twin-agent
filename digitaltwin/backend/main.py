@@ -47,6 +47,17 @@ class BuildReview(BaseModel):
     approved: bool
 
 
+@dataclass
+class BuildRegistration:
+    state: Literal["processing", "complete", "failed"] = "processing"
+    payload: dict | None = None
+    error: str | None = None
+    error_status: int = 422
+    slicing_percent: int = 0
+    layers_completed: int = 0
+    total_layers: int | None = None
+
+
 class ControlUpdate(BaseModel):
     running: bool | None = None
     laser_power_w: float | None = Field(default=None, ge=50, le=500)
@@ -381,6 +392,108 @@ class BuildReplaySession:
 lt_predictor: V5StreamingLTPredictor | None = None
 active_build: BuildReplaySession | None = None
 approved_setpoints: dict[str, float] | None = None
+build_registrations: dict[str, BuildRegistration] = {}
+build_registration_tasks: set[asyncio.Task] = set()
+
+
+def _prepare_uploaded_build(
+    body: bytes,
+    settings,
+    source_units: str,
+    progress_callback=None,
+):
+    with tempfile.TemporaryDirectory(prefix="aero-twin-build-") as work_dir:
+        stl_path = Path(work_dir) / "upload.stl"
+        cli_path = Path(work_dir) / "build.cli"
+        stl_path.write_bytes(body)
+        plan = create_build_plan(
+            stl_path,
+            cli_path,
+            settings,
+            source_units=source_units,
+            progress_callback=progress_callback,
+        )
+        events = tuple(plan.iter_events())
+    if len(events) > 100_000:
+        raise ValueError("STL creates more than 100,000 scan vectors")
+    return plan, events
+
+
+async def _process_build_registration(
+    build_id: str,
+    body: bytes,
+    settings,
+    source_units: str,
+    selected_setpoints: dict[str, float] | None,
+):
+    global active_build, lt_predictor
+    registration = build_registrations[build_id]
+    loop = asyncio.get_running_loop()
+    last_reported_percent = -1
+
+    def report_progress(completed: int, total: int):
+        nonlocal last_reported_percent
+        percent = round(completed / total * 100) if total else 0
+        if percent == last_reported_percent:
+            return
+        last_reported_percent = percent
+        loop.call_soon_threadsafe(
+            _update_build_registration_progress, registration, completed, total, percent
+        )
+
+    try:
+        plan, events = await asyncio.to_thread(
+            _prepare_uploaded_build, body, settings, source_units, report_progress
+        )
+    except (OSError, ValueError, RuntimeError) as exc:
+        registration.state = "failed"
+        registration.error = str(exc)
+        return
+
+    if plan.conversion is None:
+        registration.state = "failed"
+        registration.error = "STL conversion metadata is missing"
+        registration.error_status = 500
+        return
+
+    active_build = BuildReplaySession(
+        build_id=build_id,
+        plan=plan,
+        events=events,
+        source_units=source_units,
+    )
+    lt_predictor = None
+    registration.payload = {
+        **active_build.status(),
+        "registration_status": "complete",
+        "slicing_percent": 100,
+        "layers_completed": registration.layers_completed,
+        "total_layers": registration.total_layers,
+        "machine_id": settings.machine.machine_id,
+        "material": settings.material,
+        "process": {
+            "laser_power_w": settings.process.laser_power_w,
+            "scan_speed_mm_s": settings.process.scan_speed_mm_s,
+            "layer_thickness_um": settings.process.layer_thickness_um,
+            "hatch_spacing_mm": settings.process.hatch_spacing_mm,
+        },
+        "profile_origin": "illustrative 316L demo profile",
+        "thermal_model": "FiPy reduced-order 2D heat equation",
+        "approved_setpoints": selected_setpoints,
+    }
+    registration.state = "complete"
+
+
+def _update_build_registration_progress(
+    registration: BuildRegistration,
+    completed: int,
+    total: int,
+    percent: int,
+):
+    registration.layers_completed = completed
+    registration.total_layers = total
+    registration.slicing_percent = percent
+
 
 @app.get("/")
 async def index():
@@ -403,62 +516,68 @@ async def get_capabilities():
 
 @app.post("/api/builds")
 async def upload_build(request: Request, source_units: Literal["mm", "cm", "m", "in"] = "mm"):
-    global active_build, lt_predictor
     body = await request.body()
     if not body:
         raise HTTPException(status_code=400, detail="The STL file is empty")
     if len(body) > 15 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="STL upload limit is 15 MiB")
 
-    try:
-        with tempfile.TemporaryDirectory(prefix="aero-twin-build-") as work_dir:
-            stl_path = Path(work_dir) / "upload.stl"
-            cli_path = Path(work_dir) / "build.cli"
-            stl_path.write_bytes(body)
-            settings = demo_316l_settings()
-            if approved_setpoints is not None:
-                settings = replace(
-                    settings,
-                    process=replace(
-                        settings.process,
-                        laser_power_w=approved_setpoints["laser_power_w"],
-                        scan_speed_mm_s=approved_setpoints["scan_speed_mm_s"],
-                    ),
-                )
-            plan = create_build_plan(stl_path, cli_path, settings, source_units=source_units)
-            events = tuple(plan.iter_events())
-    except (OSError, ValueError, RuntimeError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    if len(events) > 100_000:
-        raise HTTPException(status_code=422, detail="STL creates more than 100,000 scan vectors")
-    if plan.conversion is None:
-        raise HTTPException(status_code=500, detail="STL conversion metadata is missing")
-    active_build = BuildReplaySession(
-        build_id=uuid4().hex,
-        plan=plan,
-        events=events,
-        source_units=source_units,
+    settings = demo_316l_settings()
+    selected_setpoints = approved_setpoints
+    if selected_setpoints is not None:
+        settings = replace(
+            settings,
+            process=replace(
+                settings.process,
+                laser_power_w=selected_setpoints["laser_power_w"],
+                scan_speed_mm_s=selected_setpoints["scan_speed_mm_s"],
+            ),
+        )
+    build_id = uuid4().hex
+    build_registrations[build_id] = BuildRegistration()
+    task = asyncio.create_task(
+        _process_build_registration(
+            build_id, body, settings, source_units, selected_setpoints
+        )
     )
-    lt_predictor = None
+    build_registration_tasks.add(task)
+    task.add_done_callback(build_registration_tasks.discard)
     return {
-        **active_build.status(),
-        "machine_id": settings.machine.machine_id,
-        "material": settings.material,
-        "process": {
-            "laser_power_w": settings.process.laser_power_w,
-            "scan_speed_mm_s": settings.process.scan_speed_mm_s,
-            "layer_thickness_um": settings.process.layer_thickness_um,
-            "hatch_spacing_mm": settings.process.hatch_spacing_mm,
-        },
-        "profile_origin": "illustrative 316L demo profile",
-        "thermal_model": "FiPy reduced-order 2D heat equation",
-        "approved_setpoints": approved_setpoints,
+        "build_id": build_id,
+        "status": "slicing",
+        "phase": "slicing",
+        "registration_status": "processing",
+        "slicing_percent": 0,
+        "layers_completed": 0,
+        "total_layers": None,
     }
 
 
 @app.get("/api/builds/{build_id}")
 async def get_build(build_id: str):
+    registration = build_registrations.get(build_id)
+    if registration is not None:
+        if registration.state == "processing":
+            return {
+                "build_id": build_id,
+                "status": "slicing",
+                "phase": "slicing",
+                "registration_status": "processing",
+                "slicing_percent": registration.slicing_percent,
+                "layers_completed": registration.layers_completed,
+                "total_layers": registration.total_layers,
+            }
+        if registration.state == "failed":
+            raise HTTPException(
+                status_code=registration.error_status,
+                detail=registration.error or "STL registration failed",
+            )
+        if (
+            active_build is not None
+            and active_build.build_id == build_id
+            and registration.payload is not None
+        ):
+            return registration.payload
     if active_build is None or active_build.build_id != build_id:
         raise HTTPException(status_code=404, detail="Build job not found")
     return {**active_build.status(), "last_result": active_build.last_result}

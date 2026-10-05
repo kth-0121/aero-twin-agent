@@ -59,13 +59,18 @@ class PreLTPipelineTests(unittest.TestCase):
             root = Path(directory)
             stl_path = root / "part.stl"
             trimesh.creation.box(extents=(1.0, 1.0, 0.06)).export(stl_path)
+            progress = []
             plan = create_build_plan(
                 stl_path,
                 root / "part.cli",
                 demo_316l_settings(),
+                progress_callback=lambda completed, total: progress.append((completed, total)),
             )
             self.assertEqual(plan.conversion.layer_count, 2)
             self.assertGreater(len(plan.cli_job.segments), 0)
+            self.assertEqual(progress[0], (0, 2))
+            self.assertEqual(progress[-1], (2, 2))
+            self.assertEqual(progress[-1][0] / progress[-1][1], 1.0)
 
             with PreLTDigitalTwin(plan, source_stl=str(stl_path)) as twin:
                 results = list(twin.run(event_limit=2))

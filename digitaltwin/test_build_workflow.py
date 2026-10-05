@@ -39,6 +39,79 @@ def make_session(phase="sliced"):
 
 
 class BuildWorkflowTests(unittest.TestCase):
+    def test_build_status_reports_registration_in_progress(self):
+        registration = main.BuildRegistration(
+            slicing_percent=25,
+            layers_completed=1,
+            total_layers=4,
+        )
+        with (
+            patch.dict(main.build_registrations, {"pending-build": registration}),
+            patch.object(main, "active_build", None),
+        ):
+            result = asyncio.run(main.get_build("pending-build"))
+
+        self.assertEqual(result["build_id"], "pending-build")
+        self.assertEqual(result["registration_status"], "processing")
+        self.assertEqual(result["phase"], "slicing")
+        self.assertEqual(result["slicing_percent"], 25)
+        self.assertEqual(result["layers_completed"], 1)
+        self.assertEqual(result["total_layers"], 4)
+
+    def test_build_registration_runs_preparation_without_blocking_endpoint(self):
+        registration = main.BuildRegistration()
+        plan = SimpleNamespace(
+            cli_job=SimpleNamespace(layer_count=1),
+            conversion=SimpleNamespace(
+                build_width_mm=1.0,
+                build_depth_mm=1.0,
+                build_height_mm=0.1,
+            ),
+        )
+        settings = SimpleNamespace(
+            machine=SimpleNamespace(machine_id="test-machine"),
+            material="316L",
+            process=SimpleNamespace(
+                laser_power_w=200.0,
+                scan_speed_mm_s=800.0,
+                layer_thickness_um=30.0,
+                hatch_spacing_mm=0.1,
+            ),
+        )
+
+        async def prepare_build():
+            await main._process_build_registration(
+                "ready-build", b"stl", settings, "mm", None
+            )
+
+        with (
+            patch.dict(main.build_registrations, {"ready-build": registration}),
+            patch.object(main, "active_build", None),
+            patch.object(main, "lt_predictor", None),
+            patch.object(main, "_prepare_uploaded_build", return_value=(plan, ())),
+        ):
+            asyncio.run(prepare_build())
+            result = asyncio.run(main.get_build("ready-build"))
+
+        self.assertEqual(registration.state, "complete")
+        self.assertEqual(result["registration_status"], "complete")
+        self.assertEqual(result["event_count"], 0)
+
+    def test_build_registration_exposes_slicing_errors(self):
+        registration = main.BuildRegistration()
+        with (
+            patch.dict(main.build_registrations, {"bad-build": registration}),
+            patch.object(main, "_prepare_uploaded_build", side_effect=ValueError("invalid STL")),
+        ):
+            asyncio.run(
+                main._process_build_registration("bad-build", b"stl", None, "mm", None)
+            )
+            with self.assertRaises(HTTPException) as error:
+                asyncio.run(main.get_build("bad-build"))
+
+        self.assertEqual(error.exception.status_code, 422)
+        self.assertEqual(error.exception.detail, "invalid STL")
+
     def test_new_job_waits_at_slicing_stage(self):
         session = make_session()
 

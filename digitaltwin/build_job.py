@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Iterator
+from typing import Callable, Iterator
 
 from .cli_toolpath import CLIJob, PathSegment, read_cli
 from .process import BuildSettings
@@ -137,6 +137,7 @@ def create_build_plan(
     settings: BuildSettings,
     *,
     source_units: str = "mm",
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> BuildPlan:
     """Run STL -> CLI -> validated event plan for one configured build job."""
     settings.validate()
@@ -149,6 +150,7 @@ def create_build_plan(
         hatch_spacing_mm=settings.process.hatch_spacing_mm,
         source_units=source_units,
         label=settings.job_id,
+        progress_callback=progress_callback,
     )
     machine = settings.machine
     if conversion.build_width_mm > machine.build_width_mm:

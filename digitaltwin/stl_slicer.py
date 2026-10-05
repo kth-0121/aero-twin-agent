@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from math import ceil, isfinite
 from pathlib import Path
+from typing import Callable
 
 from .cli_toolpath import LayerPaths, write_cli
 
@@ -74,6 +75,7 @@ def slice_stl_to_cli(
     hatch_spacing_mm: float,
     source_units: str = "mm",
     label: str = "AERO-TWIN-316L-DEMO",
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> STLConversionResult:
     """Slice a closed STL along +Z and generate alternating raster hatch paths.
 
@@ -119,6 +121,8 @@ def slice_stl_to_cli(
     layer_count = max(1, int(ceil(height_mm / layer_thickness_mm)))
     layers = []
     vector_count = 0
+    if progress_callback is not None:
+        progress_callback(0, layer_count)
     for layer_index in range(layer_count):
         z_mm = min(
             (layer_index + 0.5) * layer_thickness_mm,
@@ -129,6 +133,8 @@ def slice_stl_to_cli(
             plane_normal=(0.0, 0.0, 1.0),
         )
         if section is None:
+            if progress_callback is not None:
+                progress_callback(layer_index + 1, layer_count)
             continue
 
         contours = []
@@ -147,6 +153,8 @@ def slice_stl_to_cli(
             contours.append(tuple(coordinates))
             polygonal_regions.append(polygon)
         if not polygonal_regions:
+            if progress_callback is not None:
+                progress_callback(layer_index + 1, layer_count)
             continue
 
         # Even-odd composition preserves holes represented by nested mesh loops.
@@ -167,6 +175,8 @@ def slice_stl_to_cli(
                 hatches=tuple(hatches),
             )
         )
+        if progress_callback is not None:
+            progress_callback(layer_index + 1, layer_count)
 
     if not layers:
         raise ValueError("STL produced no closed contours at the requested layer thickness")

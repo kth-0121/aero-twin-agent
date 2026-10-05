@@ -191,7 +191,7 @@
         <button id="reset-button" type="button" disabled>작업 초기화</button>
       </div>
       <div class="upload-progress">
-        <div class="progress-track" role="progressbar" aria-label="STL 업로드 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="upload-progress"></span></div>
+        <div class="progress-track" role="progressbar" aria-label="STL 등록 및 슬라이싱 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="upload-progress"></span></div>
         <span id="upload-progress-label" class="upload-progress-label">대기</span>
       </div>
       <div class="job-meta">
@@ -762,6 +762,31 @@
       }
     }
     const pause = ms => new Promise(resolve => window.setTimeout(resolve, ms));
+    function updateSlicingProgress(registration) {
+      const percent = registration.slicing_percent || 0;
+      const bar = byId('upload-progress');
+      const track = bar.parentElement;
+      bar.style.width = `${percent}%`;
+      track.setAttribute('aria-valuenow', String(percent));
+      if (registration.total_layers == null) {
+        setText('upload-progress-label', '준비 중');
+        setText('job-status', 'STL 형상 확인 중 · 슬라이싱 준비');
+        return;
+      }
+      setText('upload-progress-label', `${percent}%`);
+      setText(
+        'job-status',
+        `슬라이싱 중 · ${registration.layers_completed.toLocaleString()} / ${registration.total_layers.toLocaleString()}층`,
+      );
+    }
+    async function waitForBuildRegistration(buildId) {
+      while (true) {
+        const registration = await api(`/api/builds/${buildId}`);
+        updateSlicingProgress(registration);
+        if (registration.registration_status !== 'processing') return registration;
+        await pause(1000);
+      }
+    }
 
     byId('upload-button').addEventListener('click', async () => {
       const file = byId('stl-file').files[0];
@@ -781,13 +806,16 @@
       setText('job-status', '파일 등록 준비 중');
       try {
         const units = byId('source-units').value;
-        const build = await uploadStlFile(
+        const registration = await uploadStlFile(
           `/api/builds?source_units=${encodeURIComponent(units)}`,
           file,
           updateUploadProgress,
         );
-        setText('upload-progress-label', '처리 중');
-        setText('job-status', '파일 전송 완료 · 형상 확인 및 스캔 경로 생성 중');
+        byId('upload-progress').style.width = '0%';
+        byId('upload-progress').parentElement.setAttribute('aria-valuenow', '0');
+        setText('upload-progress-label', '준비 중');
+        setText('job-status', '파일 전송 완료 · STL 형상 확인 중');
+        const build = await waitForBuildRegistration(registration.build_id);
         uploadedBuild = build;
         await showUploadedModel(file, build);
         byId('thermal-button').disabled = false;
