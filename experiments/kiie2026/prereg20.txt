@@ -1,0 +1,68 @@
+Round 20 (energy, real+anchor, seeds 1500-1509) pre-registration, written before results:
+Primary: 10-seed ensemble MSE at the trained loop count. LT "wins" only if ensemble < MLP h32 (same seeds) by >=5%.
+pred_at (loop counts 1..40) is exploratory; any loop count chosen from it must be re-tested on fresh seeds 1600-1629 (3 blocks) with that count fixed, and win in >=2/3 blocks.
+Round 20 result: trained-count LT 5.42-5.84 vs MLP 4.517 -> primary criterion FAILED. Exploratory: error falls monotonically with test-time loops (LT L10 fb: 5.49@10 -> 4.74@40).
+Round 21 (exploration seeds 1700-1709): loops up to 640, to pick a fixed count. Confirmation of that fixed count on seeds 1600-1629 per above.
+Round 21 result (seeds 1700-1709): ensemble MSE vs test-time loops, LT L10 fb: 4.96@10 4.82@20 4.62@40 4.43@80 4.47@160 5.95@320 15.6@640; MLP 4.675.
+ Caveat: SINGLE-model error rises with loops (5.26@10 -> 6.5@80 -> 146@640): members diverge, ensemble gain is averaging of drift.
+Round 22 pre-registered confirmation (written before running): LT L10 fb (same cfg) evaluated at FIXED 80 loops vs MLP h32, seeds 1600-1629 in 3 blocks of 10.
+ Win = 10-seed ensemble MSE lower than same-block MLP ensemble by >=5% in >=2 of 3 blocks. Loops 10/40/160 also logged, not used for the decision.
+Round 22 RESULT: LT@80 vs MLP per block: -20.6%, +7.7%, -3.2% -> 1/3 blocks -> FAILED. Block spread confirms instability.
+Round 23 (exploration, seeds 1800-1809): LT trained with 20/40/80 loops (eval at trained count + sweep). Any pick gets the same 3-block confirmation on new seeds 1900-1929.
+Round 24 (exploration, seeds 2000-2009): contraction penalty conv (mean ||p_k+1 - p_k||^2) and smaller state step.
+ Primary: ensemble at trained loop count, beat same-seed MLP by >=5%.
+ Extended loop count may be picked ONLY if that config's single-model mean error is non-increasing from trained count to the pick (no drift).
+ Any pick -> 3-block confirmation on fresh seeds 2100-2129, win >=5% in >=2/3 blocks.
+Round 24 RESULT (2000-2009): contraction penalty / smaller step on TRAIN inputs: ens@trained 5.17-5.53 vs MLP 4.46 -> fail; single-model drift beyond 40 loops unchanged. Loop-averaged (10..80) ensembles 4.60-5.18 vs MLP 4.30 on selection half -> fail.
+Design flaw noted: the penalty was applied where drift does not occur (training inputs).
+
+PROTOCOL CHANGE from round 25 (eval-row reuse): energy eval rows split by process-condition group (holdout_energy.json, seed 0): 162 selection / 163 holdout.
+ All config selection uses the SELECTION half only. The holdout half is scored once, at the end, for the single pre-registered config.
+Round 25 (exploration, seeds 2200-2209): 1000 unlabeled eval-region inputs (generator sampler, no labels). LT: loop-consistency (uconv) and/or physics loss (uphys) on them. MLP control: same physics loss on the same inputs.
+ Primary: ensemble at trained loop count on the selection half, >=5% below the best MLP (plain or control) on the same half.
+ Pick -> fresh seeds 2300-2329, 3 blocks, >=2/3 on selection half, then holdout scored once.
+Round 25 RESULT (2200-2209, selection half): MLP 4.53; MLP+uphys 5.08 (physics loss hurts MLP). LT@trained 4.94-5.52 -> primary FAIL.
+ uconv=10 removes drift entirely (ens flat 5.36 over 10-80 loops) but at a worse level. uconv=1+uphys=0.1: single non-increasing to 40 loops (5.20->4.76), ens@40 4.39 = -3.1% vs MLP -> below the 5% bar, not picked.
+Round 26 (exploration, seeds 2400-2409): train AT the evaluation loop count (20/40) with unlabeled loop-consistency uconv 0.3-3, uphys 0.1. Primary criterion unchanged (ens at trained count, selection half, >=5% below MLP). No extended-loop pick this round.
+Round 27 (exploration, seeds 2500-2509, runs alongside 26): attention-free looped MLP (weight-tied f, physics-residual feedback, damped update alpha, y0 = anchor), per outside advice.
+ Controls: plain anchored MLP h32; untied (unrolled, no weight sharing) version; no-feedback version; spectral-norm version; unlabeled uconv/uphys version.
+ Primary: ens at trained loop count on the selection half >=5% below MLP. Trajectory (1..80 loops) logged for analysis only.
+ Note: a win here supports "looped physics-feedback refinement", not "transformer"; the team must agree to that framing before it is used.
+Round 26 RESULT (2400-2409, selection half): LT trained at 20/40 loops with uconv 0.3-3: ens@trained 4.89-5.75 vs MLP 4.12 -> FAIL.
+Round 27 RESULT (2500-2509, selection half): MLP 3.925. Looped MLP (tied, 10 loops, alpha .25):
+ phys=0 (NO feedback) 3.629 = -7.5% -> PASSES primary; phys=1 4.18 (+6%); untied 4.11; sn 4.09; alpha .1 4.31; loops 3 4.49; unl/uconv 5.82.
+ Reading: weight-tied iteration helps, the (OOD-biased) physics feedback hurts. This contradicts the paper's physics-feedback thesis and must be reported as such.
+Round 28 pre-registered CONFIRMATION (written before running): LMLP loops=10 alpha=.25 phys=0 vs anchored MLP h32, seeds 2600-2629 in 3 blocks of 10.
+ Win = LMLP 10-seed ensemble MSE on the SELECTION half lower than the same-block MLP ensemble by >=5% in >=2/3 blocks.
+ If won: holdout half scored ONCE for those 30 seeds (3 blocks), reported whatever it shows. phys=1 is run alongside as a logged control only.
+Round 28 RESULT (2600-2629): selection half LMLP-nofb vs MLP per block -11.7/-12.9/-12.8% -> 3/3 WIN. Holdout half scored once: -13.0/-13.2/-13.8% -> 3/3. 30-seed ens: select 3.80 vs 4.34, holdout 4.04 vs 4.67.
+ Control LMLP WITH feedback: +0.3/-4.5/-6.0 (select), -2.2/-4.9/-7.0 (holdout): small, inconsistent; feedback costs ~8-10% relative to no-feedback.
+Round 29 (exploration, D/W split, seeds 2700-2709): does the looped MLP carry the D/W result too? MLP h32 / LMLP-nofb / LMLP-fb, anchored, real-only and +2000 synthetic; Transformer-LT linnoln-fb anchored +2000 as the paper's reference.
+Round 29 RESULT (D/W, anchored, 2700-2709): real-only all 23-24 (anchor extrapolates depth badly on D/W). +2000 syn: LT-transformer-fb 7.97 < MLP 8.87 < LMLP-fb1 9.12 < LMLP-fb0 9.32. Looped MLP does NOT carry the D/W result; transformer-LT still best there.
+Round 30 (exploration, D/W, NO anchor = the paper's setting, +2000 syn, seeds 2800-2809): MLP h64, LMLP-fb0/fb1 (y0 = 0), LT linnoln-fb.
+Round 30 RESULT (D/W, no anchor, +2000 syn, 2800-2809): LT-transformer-fb 7.11 < MLP-h64 8.55 (-17%) < LMLP-fb1 8.99 < LMLP-fb0 9.29. Confirms: looped MLP is energy-split-only; transformer-LT + feedback + synthetic owns D/W.
+Round 31 (exploration, energy split, PAPER setting: no anchor, +2000 synthetic, seeds 2900-2909), written before running:
+ Question: does the weight-tied looped MLP (round 28 winner, real-only+anchor) also beat MLP on the energy split in the paper's synthetic-2000 setting, where the paper reports LT ~ MLP?
+ Configs: MLP h64 (MLP-B), MLP h128 ep300 (MLP-A), LMLP fb0, LMLP fb1 (y0 = 0), LT linnoln fb.
+ Primary: 10-seed ensemble MSE on the SELECTION half (holdout_energy.json); LMLP-fb0 must be >=5% below the BEST MLP ensemble. LT logged for reference.
+ If passed: pre-registered confirmation on seeds 3000-3029 (3 blocks, >=2/3), then holdout half scored once. If failed: recorded as "looped-MLP gain is real-only/anchored only".
+Round 31 RESULT (energy, no anchor, +2000 syn, 2900-2909, selection half, 10-seed ens): MLP-A h128 7.14 < MLP-B h64 7.45 < LMLP-fb1 7.47 < LT-linnoln-fb 7.51 < LMLP-fb0 7.61.
+ LMLP-fb0 is +6.6% WORSE than the best MLP -> primary FAILED. No confirmation run. (Holdout half, informational only, same order: 7.27 / 7.70 / 7.63 / 7.69 / 7.78.)
+ Reading: the looped-MLP gain exists only in the real-only + physics-anchor setting (rounds 27-28); with 2000 synthetic rows everything converges to ~7.1-7.8 and the tuned MLP is best. With synthetic data, feedback helps the looped MLP slightly (7.47 vs 7.61) — opposite sign to the anchored case. Energy campaign closed again, 2026-10-27.
+
+=== 보조 실험 재실행: 60개 시나리오 추천 탐색 (2026-10-27, 실행 전 기록) ===
+목적: 초안 4.5절 보조 실험(v5 체크포인트 = 누출 모델 결과)을 논문 모델로 교체. 가설 검정이 아니라 수치 교체이므로 합격 기준 없음. 나온 값을 그대로 적는다.
+모델: LT-fb (orig, 10 loops, phys=1, wd 1e-4, 100 epochs), 합성 2000행, 시드 800~829를 10개씩 3블록 앙상블. D/W 분할, 에너지 분할 둘 다.
+시나리오: 677행 중 (P, v, d, t) 고유 조건에서 에너지 밀도 ED = P/(v·d) 구간별 20개씩 무작위 추출(seed 0).
+  부족 ED < 1.5e6, 정상 1.5e6 ≤ ED ≤ 4.4e6, 과다 ED > 4.4e6(논문의 키홀 기준). 팀원 보고서의 34/283/360 구간은 어떤 proxy로도 재현되지 않아 논문 정의로 대체.
+추천 규칙: 3절과 동일. 실측 범위 안 (P, v) 격자, d·t 고정, 가능 = 예측 D/W < 1 이고 예측 D ≥ t, 정규화 변화량 최소 후보.
+보고 항목: 격자 15×15 / 31×31 / 61×61 각각 구간별 발견율·평균 변화량(3블록 평균, 최소~최대), 격자 간 추천 일치율(15→31, 31→61).
+주의: 15와 31 격자는 공유 점이 없고 31과 61은 31의 점을 모두 포함하므로, 31→61 일치율은 그 자체로 격자 수렴을 뜻하지 않는다. 변화량의 수렴을 같이 본다.
+스크립트: exp_scen.py, 결과 scen_summary.csv / scen_stability.csv / scen_rows.csv.
+보조 실험 RESULT (2026-10-27, LT-fb 시드 800~829, 3블록 평균[최소~최대]):
+ 발견율: 두 분할·세 구간·세 격자 모두 60/60 = 100%.
+ 앙상블이 키홀로 판정한 시나리오: 부족 0, 정상 0, 과다 9.3(D/W 모델) / 12(에너지 모델) of 20.
+ 31×31 평균 변화량: 부족 0.017[0.016~0.018] / 정상 0.010 / 과다 0.063[0.054~0.079] (D/W 모델); 부족 0.016 / 정상 0.011 / 과다 0.148[0.140~0.158] (에너지 모델).
+  부족·정상 구간은 초기 조건이 이미 제약을 만족해 가장 가까운 격자점이 선택됨 -> 변화량 = 격자 간격(15: 0.027, 31: 0.010, 61: 0.006). 변화량이 의미 있는 곳은 과다 구간뿐.
+ 격자: 15->31 추천점 일치 0%(공유 점 없음), 31->61 일치 22%(D/W) / 24%(에너지). 평균 변화량 31->61: 0.030->0.024 (D/W), 0.058->0.053 (에너지); 과다 구간만 0.063->0.057 (-9%), 0.148->0.143 (-3%).
+ 읽기: "31×31 이상에서 추천이 안정"은 지지되지 않음(추천 좌표는 76~78%에서 바뀜). 변경량 추정치는 31에서 거의 수렴. 팀원 보고서 수치(0.174/0.047/0.216)는 제약 체계가 다르고(에너지 proxy 범위 포함) 누출 모델이라 비교 불가.
